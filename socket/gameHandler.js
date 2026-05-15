@@ -522,6 +522,31 @@ module.exports = function registerGameHandler(io) {
       performGuessPremise(io, room, userId, premiseId, player);
     });
 
+    // ── Aufgeben ───────────────────────────────────────────────
+    socket.on('game:surrender', () => {
+      const info = players.get(socket.id);
+      if (!info) return;
+      const room = rooms.get(info.roomId);
+      if (!room || room.phase !== 'guessing') return;
+
+      const opponent = otherPlayer(room, userId);
+      if (!opponent) return;
+
+      const player = room.players.find(p => p.userId === userId);
+      room.phase  = 'finished';
+      room.winner = opponent.userId;
+
+      emitStateToAll(io, room);
+      emitToRoom(io, room, 'game:over', {
+        winner: opponent.userId, winnerName: opponent.username,
+        loser: userId, loserName: player?.username || 'Spieler',
+        opponentPremise: getPremiseById(room.premises[opponent.userId]),
+        myPremise:       getPremiseById(room.premises[userId]),
+        reason: 'surrender',
+      });
+      handleGameEnd(io, room, opponent.userId, userId);
+    });
+
     // ── Rematch ────────────────────────────────────────────────
     socket.on('game:rematch', () => {
       const info = players.get(socket.id);

@@ -151,11 +151,17 @@
   <header class="topbar">
     <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
     <div class="turn-indicator" id="turn-indicator">Warte…</div>
+    <span class="timer-count" id="timer-count"></span>
     <div class="mistake-counters">
       <span>Du: <span id="my-mistakes">0</span>/3 ✗</span>
       <span>Gegner: <span id="opp-mistakes">0</span>/3 ✗</span>
     </div>
+    <button class="btn-surrender" id="btn-surrender" title="Runde aufgeben">🏳 Aufgeben</button>
   </header>
+  <!-- Timer-Leiste -->
+  <div class="turn-timer-bar">
+    <div class="turn-timer-fill" id="timer-fill"></div>
+  </div>
 
   <div class="game-layout">
     <!-- Links: Meine Prämisse + was Gegner bei mir richtig geraten hat -->

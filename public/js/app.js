@@ -28,6 +28,72 @@ const state = {
   guessPremise: null,
 };
 
+// ─── Turn-Timer ───────────────────────────────────────────────────────────────
+const TURN_SECONDS = 20;
+let   turnTimerInterval = null;
+let   lastTurnOwner     = null;
+
+// Pokémon-Pool für Auto-Vorschlag wenn Zeit abläuft
+const AUTO_SUGGEST_POOL = [
+  'Pikachu','Relaxo','Gengar','Turtok','Bisaflor','Glurak','Arkani',
+  'Mewtu','Garados','Lapras','Raichu','Machomei','Evoli','Flareon','Aquana',
+  'Ditto','Eevee','Snorlax','Mewtwo','Blastoise',
+];
+
+function startTurnTimer() {
+  clearTurnTimer();
+  let seconds = TURN_SECONDS;
+
+  const fill  = document.getElementById('timer-fill');
+  const count = document.getElementById('timer-count');
+
+  // CSS-Animation neu starten
+  if (fill) {
+    fill.classList.remove('running');
+    void fill.getBoundingClientRect(); // reflow erzwingen
+    fill.classList.add('running');
+  }
+
+  function updateCount() {
+    if (!count) return;
+    count.textContent = `${seconds}s`;
+    count.className   = seconds <= 5 ? 'timer-count danger'
+                      : seconds <= 10 ? 'timer-count warn'
+                      : 'timer-count';
+  }
+  updateCount();
+
+  turnTimerInterval = setInterval(() => {
+    seconds--;
+    updateCount();
+    if (seconds <= 0) {
+      clearTurnTimer();
+      autoSuggestOnTimeout();
+    }
+  }, 1000);
+}
+
+function clearTurnTimer() {
+  if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
+  const fill  = document.getElementById('timer-fill');
+  const count = document.getElementById('timer-count');
+  if (fill)  { fill.classList.remove('running'); fill.style.width = '0%'; }
+  if (count) { count.textContent = ''; count.className = 'timer-count'; }
+}
+
+function autoSuggestOnTimeout() {
+  if (!state.gameState || state.gameState.phase !== 'guessing') return;
+  // Schon vorgeschlagene Namen herausfiltern
+  const suggested = new Set(
+    (state.gameState.myGuessHistory || []).filter(h => h.pokemonId).map(h => h.pokemonName)
+  );
+  const pool = AUTO_SUGGEST_POOL.filter(n => !suggested.has(n));
+  const name = pool[Math.floor(Math.random() * pool.length)] || 'Pikachu';
+  toast(`⏱ Zeit abgelaufen – Auto: ${name}`, 'info', 2500);
+  lastTurnOwner = null; // Timer nach Antwort ggf. neu starten
+  socket.emit('game:suggestPokemon', { pokemonName: name });
+}
+
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 function toast(msg, type = 'info', ms = 3500) {
   const el = Object.assign(document.createElement('div'), { className: `toast ${type}`, textContent: msg });
@@ -333,6 +399,8 @@ function showGameScreen() {
   document.getElementById('opp-suggest-count').textContent = '0';
   if (state.confirmedPremise)
     document.getElementById('my-premise-badge').textContent = state.confirmedPremise.label;
+  lastTurnOwner = null; // Timer-State zurücksetzen
+  clearTurnTimer();
   initPokemonSearch();
   renderGuessPremiseList('');
 }
@@ -343,10 +411,15 @@ function updateGameState(gs) {
   const turnEl = document.getElementById('turn-indicator');
   if (gs.phase === 'finished') {
     turnEl.textContent = 'Spiel beendet'; turnEl.className = 'turn-indicator';
+    clearTurnTimer(); lastTurnOwner = null;
   } else if (isMyTurn) {
     turnEl.textContent = '🟢 Du bist dran!'; turnEl.className = 'turn-indicator my-turn';
+    // Timer nur starten, wenn sich der Zug wechselt
+    if (lastTurnOwner !== state.user?.id) startTurnTimer();
+    lastTurnOwner = state.user?.id;
   } else {
     turnEl.textContent = `⏳ ${gs.opponentName||'Gegner'} denkt…`; turnEl.className = 'turn-indicator opp-turn';
+    clearTurnTimer(); lastTurnOwner = gs.currentTurn;
   }
   document.getElementById('my-mistakes').textContent  = gs.myMistakes;
   document.getElementById('opp-mistakes').textContent = gs.opponentMistakes;
@@ -479,13 +552,21 @@ function showResult(data) {
   document.getElementById('result-icon').textContent    = isWinner ? '🏆' : '💀';
   document.getElementById('result-title').textContent   = isWinner ? 'Sieg!' : 'Niederlage';
   document.getElementById('result-subtitle').textContent = isWinner ? 'Du hast gewonnen!' : `${data.winnerName} hat gewonnen.`;
-  const reason = data.reason === 'correct_guess' ? 'Die Prämisse wurde korrekt erraten.' : `${data.loserName} hatte 3 Fehlversuche.`;
+  const reason = data.reason === 'correct_guess' ? 'Die Prämisse wurde korrekt erraten.'
+               : data.reason === 'surrender'     ? (isWinner ? `${data.loserName} hat aufgegeben.` : 'Du hast aufgegeben.')
+               : `${data.loserName} hatte 3 Fehlversuche.`;
   document.getElementById('result-details').innerHTML = `
     <div>${reason}</div>
     ${data.opponentPremise ? `<div style="margin-top:8px">Gegner-Prämisse: <strong>${data.opponentPremise.label}</strong></div>` : ''}
     ${data.myPremise      ? `<div>Deine Prämisse: <strong>${data.myPremise.label}</strong></div>` : ''}
   `;
 }
+
+document.getElementById('btn-surrender').addEventListener('click', () => {
+  if (!confirm('Wirklich aufgeben? Du verlierst die Runde!')) return;
+  clearTurnTimer();
+  socket.emit('game:surrender');
+});
 
 document.getElementById('btn-rematch').addEventListener('click', () => socket.emit('game:rematch'));
 document.getElementById('btn-back-lobby').addEventListener('click', () => {
