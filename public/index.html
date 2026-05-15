@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PokéGuess – Wer weiß es?</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════ AUTH SCREEN ═══════════════════════════ -->
+<div id="screen-auth" class="screen active">
+  <div class="auth-box">
+    <div class="logo">
+      <span class="logo-poke">Poké</span><span class="logo-guess">Guess</span>
+    </div>
+    <p class="tagline">Errate die Prämisse deines Gegners!</p>
+
+    <div class="tab-bar">
+      <button class="tab active" data-tab="login">Login</button>
+      <button class="tab" data-tab="register">Registrieren</button>
+    </div>
+
+    <form id="form-login" class="auth-form active">
+      <input type="text" id="login-username" placeholder="Benutzername" autocomplete="username" required />
+      <input type="password" id="login-password" placeholder="Passwort" autocomplete="current-password" required />
+      <button type="submit" class="btn-primary">Einloggen</button>
+      <p class="auth-error" id="login-error"></p>
+    </form>
+
+    <form id="form-register" class="auth-form">
+      <input type="text" id="reg-username" placeholder="Benutzername (3–20 Zeichen)" required />
+      <input type="password" id="reg-password" placeholder="Passwort (min. 6 Zeichen)" required />
+      <button type="submit" class="btn-primary">Account erstellen</button>
+      <p class="auth-error" id="reg-error"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ LOBBY SCREEN ══════════════════════════ -->
+<div id="screen-lobby" class="screen">
+  <header class="topbar">
+    <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
+    <div class="user-info">
+      <span id="ui-username"></span>
+      <div class="xp-bar-wrap">
+        <div class="xp-bar-fill" id="ui-xp-bar"></div>
+      </div>
+      <span class="level-badge" id="ui-level">Lv.1</span>
+      <button class="btn-sm" id="btn-logout">Logout</button>
+    </div>
+  </header>
+
+  <main class="lobby-main">
+    <h2>Spiel beitreten</h2>
+
+    <div class="lobby-card">
+      <label>Raum-Code eingeben oder neuen erstellen:</label>
+      <div class="room-input-row">
+        <input type="text" id="room-code" placeholder="z.B. PIKA42" maxlength="10" />
+        <button class="btn-primary" id="btn-join">Beitreten / Erstellen</button>
+      </div>
+      <button class="btn-secondary" id="btn-random-room">Zufälliger Raum-Code</button>
+    </div>
+
+    <div id="lobby-status" class="lobby-status hidden">
+      <div class="spinner"></div>
+      <p id="lobby-status-text">Warte auf Mitspieler…</p>
+    </div>
+
+    <div class="stats-card">
+      <h3>Deine Statistiken</h3>
+      <div class="stats-grid">
+        <div><span id="stat-wins">0</span><small>Siege</small></div>
+        <div><span id="stat-losses">0</span><small>Niederlagen</small></div>
+        <div><span id="stat-games">0</span><small>Spiele</small></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════════════════════ PREMISE SELECTION SCREEN ═══════════════════ -->
+<div id="screen-select" class="screen">
+  <header class="topbar">
+    <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
+    <div class="user-info">
+      <span id="sel-username"></span>
+      <span class="level-badge" id="sel-level">Lv.1</span>
+    </div>
+  </header>
+
+  <main class="select-main">
+    <h2>Wähle deine Prämisse</h2>
+    <p class="hint-text" id="sel-opponent-hint">Dein Gegner wählt auch gerade…</p>
+
+    <div class="premise-search-bar">
+      <input type="text" id="premise-search" placeholder="Prämisse suchen…" />
+    </div>
+
+    <div class="category-tabs" id="category-tabs"></div>
+
+    <div id="premise-list" class="premise-list"></div>
+
+    <!-- Pokémon-Vorschau (nach Klick) -->
+    <div id="premise-preview" class="premise-preview hidden">
+      <div class="preview-header">
+        <h3 id="preview-title"></h3>
+        <span id="preview-count" class="count-badge"></span>
+        <button class="btn-primary" id="btn-confirm-premise">Diese Prämisse wählen ✓</button>
+        <button class="btn-ghost" id="btn-cancel-preview">Abbrechen</button>
+      </div>
+      <div id="preview-pokemon-grid" class="pokemon-mini-grid"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════ GAME SCREEN ═══════════════════════════ -->
+<div id="screen-game" class="screen">
+  <header class="topbar">
+    <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
+    <div class="turn-indicator" id="turn-indicator">Warte…</div>
+    <div class="mistake-counters">
+      <span>Du: <span id="my-mistakes">0</span>/3 ✗</span>
+      <span id="opp-mistakes-label">Gegner: <span id="opp-mistakes">0</span>/3 ✗</span>
+    </div>
+  </header>
+
+  <div class="game-layout">
+    <!-- Linke Spalte: Meine Prämisse + bestätigte Pokémon des Gegners -->
+    <aside class="panel panel-left">
+      <div class="panel-section">
+        <h4>Meine Prämisse</h4>
+        <div class="premise-badge" id="my-premise-badge">–</div>
+      </div>
+      <div class="panel-section">
+        <h4>Gegner hat bestätigt <span class="count-badge" id="confirmed-count">0</span></h4>
+        <div id="confirmed-pokemon-list" class="confirmed-list"></div>
+      </div>
+    </aside>
+
+    <!-- Mitte: Eingabe + Verlauf -->
+    <main class="game-center">
+      <div class="input-area" id="input-area">
+        <div class="input-tabs">
+          <button class="input-tab active" data-mode="pokemon">Pokémon vorschlagen</button>
+          <button class="input-tab" data-mode="premise">Prämisse raten</button>
+        </div>
+
+        <!-- Pokémon-Suche -->
+        <div class="input-panel active" id="panel-pokemon">
+          <div class="search-wrap">
+            <input type="text" id="pokemon-search-input" placeholder="Pokémon-Name eingeben…" autocomplete="off" />
+            <div id="pokemon-suggestions" class="suggestions hidden"></div>
+          </div>
+          <button class="btn-primary" id="btn-suggest">Vorschlagen →</button>
+        </div>
+
+        <!-- Prämisse raten -->
+        <div class="input-panel" id="panel-premise">
+          <p class="warn-text">⚠️ Falsches Raten kostet einen Fehlversuch! (max. 3)</p>
+          <div class="premise-search-bar">
+            <input type="text" id="guess-premise-search" placeholder="Prämisse suchen…" />
+          </div>
+          <div id="guess-premise-list" class="premise-list compact"></div>
+          <button class="btn-danger" id="btn-guess-premise" disabled>Prämisse raten!</button>
+        </div>
+      </div>
+
+      <!-- Verlauf -->
+      <div class="guess-history" id="guess-history">
+        <h4>Vorschläge-Verlauf</h4>
+        <div id="history-list"></div>
+      </div>
+    </main>
+
+    <!-- Rechte Spalte: Verlauf des Gegners (was der Gegner mir vorgeschlagen hat) -->
+    <aside class="panel panel-right">
+      <h4>Gegner fragt mich</h4>
+      <div id="opp-history-list" class="opp-history"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ RESULT SCREEN ══════════════════════════ -->
+<div id="screen-result" class="screen">
+  <div class="result-box">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h2 id="result-title">Ergebnis</h2>
+    <p id="result-subtitle"></p>
+    <div class="result-details" id="result-details"></div>
+    <div class="xp-earned" id="xp-earned"></div>
+    <div class="result-buttons">
+      <button class="btn-primary" id="btn-rematch">Rematch!</button>
+      <button class="btn-secondary" id="btn-back-lobby">Zurück zur Lobby</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ TOAST NOTIFICATIONS ═══════════════════════ -->
+<div id="toast-container"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
