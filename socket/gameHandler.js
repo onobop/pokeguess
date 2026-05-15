@@ -1,439 +1,577 @@
 /**
- * gameHandler.js
- * Verwaltet alle Spielzustände und Socket-Events.
- *
- * Spielablauf:
- *  1. Beide Spieler joinen eine Lobby → ready
- *  2. Beide wählen eine Prämisse (und sehen ihre Pokémon-Liste)
- *  3. Zufällig wird Startspieler gewählt → phase: 'guessing'
- *  4. Am Zug: Pokémon vorschlagen ODER Prämisse raten
- *     - Pokémon: Auto-Check → ja/nein; nein = Zugwechsel
- *     - Prämisse raten: falsch = Fehlversuch (max 3), richtig = Sieg
- *  5. 3 Fehlversuche → Verlierer
+ * gameHandler.js – PokéGuess Multiplayer + Bot-Support + Ranked
  */
 
 const jwt = require('jsonwebtoken');
-const { pokemonMatchesPremise, findPokemonByName, getPremiseById, getPokemonForPremise } = require('../engine/premiseEngine');
+const {
+  pokemonMatchesPremise, findPokemonByName, getPremiseById,
+  getPokemonForPremise, getPremisesForTier, getMaxTierForLevel,
+} = require('../engine/premiseEngine');
+const {
+  getBotForLP, choosePremiseForBot, choosePokemonToSuggest, guessPremise: botGuessPremise,
+} = require('../engine/botAI');
 
-// ─── In-Memory Spielzustand ────────────────────────────────────────────────────
-// rooms: Map<roomId, RoomState>
-const rooms = new Map();
+// ─── In-Memory State ──────────────────────────────────────────────────────────
+const rooms   = new Map();   // roomId → RoomState
+const players = new Map();   // socketId → { userId, username, roomId }
+const userSockets = new Map(); // userId → socketId
 
-// socketId → { userId, username, roomId }
-const players = new Map();
+// Ranked Matchmaking Queue: [{ userId, username, lp, level, socketId, joinedAt }]
+let rankedQueue = [];
+const QUEUE_BOT_TIMEOUT = 15_000; // 15s ohne Gegner → Bot
 
-// userId → socketId  (für Reconnect)
-const userSockets = new Map();
+// ─── LP-Änderungen ────────────────────────────────────────────────────────────
+const LP = {
+  WIN_VS_PLAYER:  25,
+  LOSS_VS_PLAYER: -20,
+  WIN_VS_BOT:     15,
+  LOSS_VS_BOT:    -8,
+};
 
-function createRoom(roomId) {
+// ─── Room erstellen ───────────────────────────────────────────────────────────
+function createRoom(roomId, isRanked = false) {
   return {
-    id: roomId,
-    phase: 'waiting',   // waiting | selecting | guessing | finished
-    players: [],        // [{ socketId, userId, username, level }]
-    premises: {},       // { userId: premiseId }
-    premisePokemon: {}, // { userId: [pokemon] }  – die gültige Pokemon-Liste zur Prämisse
-    currentTurn: null,  // userId wer gerade dran ist
-    guesses: {},        // { userId: [{ pokemon?, premiseGuess?, result }] }
-    mistakes: {},       // { userId: number }
-    confirmedPokemon: {},// { userId: [pokemon] }  – korrekt vom Gegner erraten
-    winner: null,
-    startTime: null,
+    id: roomId, phase: 'waiting', isRanked,
+    players: [],
+    premises: {}, premisePokemon: {},
+    currentTurn: null,
+    guesses: {}, mistakes: {},
+    confirmedPokemon: {},
+    oppSuggestHistory: {}, // was der Gegner vorgeschlagen hat (sieht man)
+    winner: null, startTime: null,
+    hasBot: false,
   };
 }
-
-// ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 function otherPlayer(room, userId) {
   return room.players.find(p => p.userId !== userId);
 }
 
-function roomPublicState(room, forUserId) {
-  // Gibt dem Spieler seinen eigenen Prämissen-Kontext,
-  // aber verbirgt die Prämisse des Gegners.
-  const opponent = otherPlayer(room, forUserId);
+function roomStateFor(room, userId) {
+  const opp = otherPlayer(room, userId);
   return {
-    id: room.id,
-    phase: room.phase,
-    currentTurn: room.currentTurn,
-    winner: room.winner,
-    myPremiseId: room.premises[forUserId] || null,
-    myMistakes: room.mistakes[forUserId] || 0,
-    opponentMistakes: opponent ? (room.mistakes[opponent.userId] || 0) : 0,
-    opponentName: opponent ? opponent.username : null,
-    opponentId: opponent ? opponent.userId : null,
-    // Pokémon, die mein Gegner mir korrekt als zugehörig zu seiner Prämisse vorgeschlagen hat
-    confirmedForMe: room.confirmedPokemon[forUserId] || [],
-    // Pokémon, die ich dem Gegner vorgeschlagen habe (mit ja/nein Antwort)
-    myGuessHistory: room.guesses[forUserId] || [],
+    id: room.id, phase: room.phase, isRanked: room.isRanked,
+    currentTurn: room.currentTurn, winner: room.winner,
+    hasBot: room.hasBot,
+    myPremiseId: room.premises[userId] || null,
+    myMistakes:  room.mistakes[userId] || 0,
+    opponentMistakes: opp ? (room.mistakes[opp.userId] || 0) : 0,
+    opponentName: opp ? opp.username : null,
+    opponentId:   opp ? opp.userId : null,
+    confirmedForMe:  room.confirmedPokemon[userId] || [],
+    myGuessHistory:  room.guesses[userId] || [],
+    oppSuggestHistory: room.oppSuggestHistory[userId] || [],
   };
 }
 
 function emitToRoom(io, room, event, data) {
   for (const p of room.players) {
-    const socket = io.sockets.sockets.get(p.socketId);
-    if (socket) socket.emit(event, data);
+    if (p.isBot) continue;
+    const s = io.sockets.sockets.get(p.socketId);
+    if (s) s.emit(event, data);
   }
 }
 
 function emitStateToAll(io, room) {
   for (const p of room.players) {
-    const socket = io.sockets.sockets.get(p.socketId);
-    if (socket) socket.emit('game:state', roomPublicState(room, p.userId));
+    if (p.isBot) continue;
+    const s = io.sockets.sockets.get(p.socketId);
+    if (s) s.emit('game:state', roomStateFor(room, p.userId));
   }
 }
 
-// ─── Socket-Handler registrieren ─────────────────────────────────────────────
+// ─── Bot-Aktionen ─────────────────────────────────────────────────────────────
+function scheduleBotAction(io, room, botPlayer) {
+  if (room.phase !== 'guessing' || room.currentTurn !== botPlayer.userId) return;
 
+  const delay = botPlayer.thinkTime + Math.random() * 2000;
+
+  setTimeout(() => {
+    if (room.phase !== 'guessing' || room.currentTurn !== botPlayer.userId) return;
+
+    const humanPlayer = otherPlayer(room, botPlayer.userId);
+    if (!humanPlayer) return;
+
+    const confirmed    = room.confirmedPokemon[botPlayer.userId] || [];
+    const suggestedIds = (room.guesses[botPlayer.userId] || [])
+      .filter(g => g.pokemonId).map(g => g.pokemonId);
+    const wrongGuesses = (room.guesses[botPlayer.userId] || [])
+      .filter(g => g.premiseGuess && g.result === 'wrong')
+      .map(g => g.premiseGuess);
+
+    // Soll der Bot die Prämisse raten?
+    const currentMistakes = room.mistakes[botPlayer.userId] || 0;
+    if (confirmed.length >= botPlayer.minConfirmed && currentMistakes < 3) {
+      const guess = botGuessPremise(confirmed, wrongGuesses, botPlayer.guessAccuracy);
+      if (guess) {
+        performGuessPremise(io, room, botPlayer.userId, guess, botPlayer);
+        return;
+      }
+    }
+
+    // Pokémon vorschlagen
+    const pokemon = choosePokemonToSuggest(
+      confirmed.map(p => p.id), suggestedIds, botPlayer.guessAccuracy
+    );
+    if (pokemon) {
+      performSuggestPokemon(io, room, botPlayer.userId, pokemon);
+    }
+  }, delay);
+}
+
+// ─── Pokémon vorschlagen (shared für Mensch + Bot) ────────────────────────────
+function performSuggestPokemon(io, room, userId, pokemon) {
+  const opponent = otherPlayer(room, userId);
+  if (!opponent) return;
+
+  const alreadySuggested = (room.guesses[userId] || []).some(g => g.pokemonId === pokemon.id);
+  if (alreadySuggested) {
+    // Bot wählt ein anderes
+    if (room.players.find(p => p.userId === userId)?.isBot) {
+      scheduleBotAction(io, room, room.players.find(p => p.userId === userId));
+    }
+    return;
+  }
+
+  const opponentPremiseId = room.premises[opponent.userId];
+  const matches = pokemonMatchesPremise(pokemon, opponentPremiseId);
+
+  const entry = {
+    pokemonId: pokemon.id, pokemonName: pokemon.nameDE,
+    pokemonSprite: pokemon.sprite, pokemonTypes: pokemon.types,
+    result: matches ? 'yes' : 'no', timestamp: Date.now(),
+  };
+  room.guesses[userId].push(entry);
+
+  if (matches) {
+    room.confirmedPokemon[userId].push({
+      id: pokemon.id, name: pokemon.nameDE,
+      sprite: pokemon.sprite, types: pokemon.types,
+    });
+  }
+
+  // Gegner sieht Vorschlag in seiner rechten Spalte
+  if (!room.oppSuggestHistory[opponent.userId]) room.oppSuggestHistory[opponent.userId] = [];
+  room.oppSuggestHistory[opponent.userId].push({
+    pokemonId: pokemon.id, pokemonName: pokemon.nameDE,
+    pokemonSprite: pokemon.sprite, pokemonTypes: pokemon.types,
+    result: matches ? 'yes' : 'no',
+  });
+
+  if (!matches) room.currentTurn = opponent.userId;
+
+  emitStateToAll(io, room);
+  emitToRoom(io, room, 'game:pokemonResult', {
+    suggestedBy: userId,
+    pokemon: { id: pokemon.id, name: pokemon.nameDE, sprite: pokemon.sprite, types: pokemon.types },
+    matches, nextTurn: room.currentTurn,
+  });
+
+  // Falls jetzt der Bot dran ist
+  if (!matches) {
+    const nextPlayer = room.players.find(p => p.userId === room.currentTurn);
+    if (nextPlayer?.isBot) scheduleBotAction(io, room, nextPlayer);
+  } else {
+    const cur = room.players.find(p => p.userId === userId);
+    if (cur?.isBot) scheduleBotAction(io, room, cur);
+  }
+}
+
+// ─── Prämisse raten (shared für Mensch + Bot) ─────────────────────────────────
+function performGuessPremise(io, room, userId, premiseId, playerRef) {
+  const opponent = otherPlayer(room, userId);
+  if (!opponent) return;
+
+  const correct = premiseId === room.premises[opponent.userId];
+  const label   = getPremiseById(premiseId)?.label || premiseId;
+
+  room.guesses[userId].push({
+    premiseGuess: premiseId, premiseLabel: label,
+    result: correct ? 'correct' : 'wrong', timestamp: Date.now(),
+  });
+
+  if (correct) {
+    room.phase  = 'finished';
+    room.winner = userId;
+    emitStateToAll(io, room);
+    emitToRoom(io, room, 'game:over', {
+      winner: userId, winnerName: playerRef?.username || 'Spieler',
+      loser: opponent.userId, loserName: opponent.username,
+      opponentPremise: getPremiseById(room.premises[opponent.userId]),
+      myPremise: getPremiseById(room.premises[userId]),
+      reason: 'correct_guess',
+    });
+    handleGameEnd(io, room, userId, opponent.userId);
+  } else {
+    room.mistakes[userId] = (room.mistakes[userId] || 0) + 1;
+    if (room.mistakes[userId] >= 3) {
+      room.phase  = 'finished';
+      room.winner = opponent.userId;
+      emitStateToAll(io, room);
+      emitToRoom(io, room, 'game:over', {
+        winner: opponent.userId, winnerName: opponent.username,
+        loser: userId, loserName: playerRef?.username || 'Spieler',
+        opponentPremise: getPremiseById(room.premises[opponent.userId]),
+        myPremise: getPremiseById(room.premises[userId]),
+        reason: 'max_mistakes',
+      });
+      handleGameEnd(io, room, opponent.userId, userId);
+    } else {
+      room.currentTurn = opponent.userId;
+      emitStateToAll(io, room);
+      emitToRoom(io, room, 'game:wrongGuess', {
+        guessedBy: userId,
+        premiseLabel: label,
+        mistakesLeft: 3 - room.mistakes[userId],
+        nextTurn: room.currentTurn,
+      });
+      // Bot-Zug?
+      const nextP = room.players.find(p => p.userId === room.currentTurn);
+      if (nextP?.isBot) scheduleBotAction(io, room, nextP);
+    }
+  }
+}
+
+// ─── Bot-Prämisse sofort wählen (nach kurzer Verzögerung) ────────────────────
+function botChoosePremise(io, room, botPlayer) {
+  const delay = 1500 + Math.random() * 2000;
+  setTimeout(() => {
+    if (room.phase !== 'selecting') return;
+    const premise = choosePremiseForBot(botPlayer.level);
+    if (!premise) return;
+
+    room.premises[botPlayer.userId] = premise.id;
+    room.premisePokemon[botPlayer.userId] = getPokemonForPremise(premise.id);
+
+    const bothChosen = room.players.every(p => room.premises[p.userId]);
+    if (bothChosen) startGame(io, room);
+  }, delay);
+}
+
+function startGame(io, room) {
+  room.phase = 'guessing';
+  room.startTime = Date.now();
+  const startIdx = Math.floor(Math.random() * room.players.length);
+  room.currentTurn = room.players[startIdx].userId;
+
+  emitStateToAll(io, room);
+  emitToRoom(io, room, 'game:started', {
+    currentTurn: room.currentTurn,
+    currentTurnName: room.players[startIdx].username,
+  });
+
+  const startPlayer = room.players[startIdx];
+  if (startPlayer.isBot) scheduleBotAction(io, room, startPlayer);
+}
+
+// ─── Ranked Matchmaking ───────────────────────────────────────────────────────
+function processRankedQueue(io) {
+  if (rankedQueue.length < 2) return;
+
+  rankedQueue.sort((a, b) => a.joinedAt - b.joinedAt);
+  const p1 = rankedQueue.shift();
+  const p2 = rankedQueue.shift();
+
+  // LP-Prüfung: max 200 LP Unterschied (bei langer Wartezeit lockerer)
+  const waitP2 = Date.now() - p2.joinedAt;
+  const maxDiff = waitP2 > 10000 ? 400 : 200;
+  if (Math.abs(p1.lp - p2.lp) > maxDiff) {
+    rankedQueue.unshift(p2); rankedQueue.unshift(p1);
+    return;
+  }
+
+  const roomId = `ranked_${Date.now()}`;
+  const room   = createRoom(roomId, true);
+  rooms.set(roomId, room);
+
+  room.players.push(
+    { socketId: p1.socketId, userId: p1.userId, username: p1.username, level: p1.level, lp: p1.lp, isBot: false },
+    { socketId: p2.socketId, userId: p2.userId, username: p2.username, level: p2.level, lp: p2.lp, isBot: false },
+  );
+  [p1, p2].forEach(p => {
+    players.set(p.socketId, { userId: p.userId, username: p.username, roomId });
+    const s = io.sockets.sockets.get(p.socketId);
+    if (s) s.join(roomId);
+    room.mistakes[p.userId] = 0;
+    room.guesses[p.userId]  = [];
+    room.confirmedPokemon[p.userId] = [];
+    room.oppSuggestHistory[p.userId] = [];
+  });
+
+  room.phase = 'selecting';
+  emitToRoom(io, room, 'game:selectPremise', {
+    message: '⚔ Ranked Match gefunden! Wähle deine Prämisse.',
+    players: room.players.map(p => ({ username: p.username, userId: p.userId })),
+    isRanked: true,
+  });
+}
+
+function injectBot(io, entry) {
+  // Spieler noch in Queue?
+  if (!rankedQueue.find(q => q.userId === entry.userId)) return;
+  rankedQueue = rankedQueue.filter(q => q.userId !== entry.userId);
+
+  const socket = io.sockets.sockets.get(entry.socketId);
+  if (!socket) return;
+
+  const bot = getBotForLP(entry.lp);
+  const roomId = `ranked_bot_${Date.now()}`;
+  const room   = createRoom(roomId, true);
+  rooms.set(roomId, room);
+  room.hasBot = true;
+
+  const humanPlayerEntry = { socketId: entry.socketId, userId: entry.userId, username: entry.username, level: entry.level, lp: entry.lp, isBot: false };
+  const botEntry = { socketId: null, userId: bot.userId, username: bot.name, level: bot.level, lp: bot.lp, isBot: true, ...bot };
+
+  room.players.push(humanPlayerEntry, botEntry);
+  players.set(entry.socketId, { userId: entry.userId, username: entry.username, roomId });
+  socket.join(roomId);
+
+  [humanPlayerEntry, botEntry].forEach(p => {
+    room.mistakes[p.userId] = 0;
+    room.guesses[p.userId]  = [];
+    room.confirmedPokemon[p.userId] = [];
+    room.oppSuggestHistory[p.userId] = [];
+  });
+
+  room.phase = 'selecting';
+  socket.emit('game:selectPremise', {
+    message: '⚔ Gegner gefunden! Wähle deine Prämisse.',
+    players: room.players.map(p => ({ username: p.username, userId: p.userId })),
+    isRanked: true,
+  });
+
+  botChoosePremise(io, room, botEntry);
+}
+
+// ─── XP/LP nach Spielende ────────────────────────────────────────────────────
+async function handleGameEnd(io, room, winnerId, loserId) {
+  try {
+    const User = require('../models/User');
+    const winnerIsBot = room.players.find(p => p.userId === winnerId)?.isBot;
+    const loserIsBot  = room.players.find(p => p.userId === loserId)?.isBot;
+
+    const lpWin  = room.isRanked ? (winnerIsBot ? 0 : (loserIsBot ? LP.WIN_VS_BOT  : LP.WIN_VS_PLAYER))  : 0;
+    const lpLoss = room.isRanked ? (loserIsBot  ? 0 : (winnerIsBot ? LP.LOSS_VS_BOT : LP.LOSS_VS_PLAYER)) : 0;
+
+    const updates = [];
+    if (!winnerIsBot) updates.push({ id: winnerId, xp: 50, lp: lpWin, win: true, ranked: room.isRanked });
+    if (!loserIsBot)  updates.push({ id: loserId,  xp: 10, lp: lpLoss, win: false, ranked: room.isRanked });
+
+    for (const u of updates) {
+      const user = await User.findById(u.id);
+      if (!user) continue;
+      user.addXp(u.xp);
+      if (room.isRanked) user.addLp(u.lp);
+      user.stats.gamesPlayed += 1;
+      if (u.win) { user.stats.wins += 1; if (u.ranked) user.stats.rankedWins += 1; }
+      else        { user.stats.losses += 1; if (u.ranked) user.stats.rankedLosses += 1; }
+      await user.save();
+
+      const sock = io.sockets.sockets.get(userSockets.get(u.id));
+      if (sock) sock.emit('user:statsUpdated', {
+        level: user.level, xp: user.xp, xpToNext: user.xpToNextLevel(),
+        lp: user.lp, league: user.league, stats: user.stats,
+        lpChange: u.lp,
+      });
+    }
+  } catch (e) { console.error('handleGameEnd Fehler:', e); }
+}
+
+// ─── Socket-Handler ───────────────────────────────────────────────────────────
 module.exports = function registerGameHandler(io) {
-
-  // Auth-Middleware für Socket.io
+  // Auth Middleware
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Nicht authentifiziert'));
-    try {
-      socket.userData = jwt.verify(token, process.env.JWT_SECRET);
-      next();
-    } catch {
-      next(new Error('Token ungültig'));
-    }
+    try { socket.userData = jwt.verify(token, process.env.JWT_SECRET); next(); }
+    catch { next(new Error('Token ungültig')); }
   });
+
+  // Ranked Queue Prozessor (alle 2s)
+  setInterval(() => processRankedQueue(io), 2000);
 
   io.on('connection', (socket) => {
     const { id: userId, username } = socket.userData;
 
-    // Alten Socket ersetzen bei Reconnect
+    // Reconnect
     if (userSockets.has(userId)) {
-      const oldSocketId = userSockets.get(userId);
-      const oldPlayer = players.get(oldSocketId);
-      if (oldPlayer) {
-        const room = rooms.get(oldPlayer.roomId);
+      const old = userSockets.get(userId);
+      const oldInfo = players.get(old);
+      if (oldInfo) {
+        const room = rooms.get(oldInfo.roomId);
         if (room) {
-          const player = room.players.find(p => p.userId === userId);
-          if (player) player.socketId = socket.id;
+          const p = room.players.find(p => p.userId === userId);
+          if (p) p.socketId = socket.id;
         }
-        players.delete(oldSocketId);
+        players.delete(old);
       }
     }
     userSockets.set(userId, socket.id);
 
-    // ── join_lobby ─────────────────────────────────────────────────────────
-    socket.on('lobby:join', ({ roomId, level }) => {
-      if (!roomId) return socket.emit('error', { message: 'Kein Raum angegeben' });
-
+    // ── Privates Spiel: Lobby beitreten ───────────────────────
+    socket.on('lobby:join', ({ roomId, level, lp }) => {
+      if (!roomId) return socket.emit('error', { message: 'Kein Raum-Code' });
       let room = rooms.get(roomId);
-      if (!room) {
-        room = createRoom(roomId);
-        rooms.set(roomId, room);
-      }
-
-      if (room.players.length >= 2 && !room.players.find(p => p.userId === userId)) {
+      if (!room) { room = createRoom(roomId, false); rooms.set(roomId, room); }
+      if (room.players.length >= 2 && !room.players.find(p => p.userId === userId))
         return socket.emit('error', { message: 'Raum ist voll' });
-      }
 
-      // Spieler hinzufügen oder updaten
       const existing = room.players.find(p => p.userId === userId);
-      if (!existing) {
-        room.players.push({ socketId: socket.id, userId, username, level: level || 1 });
-      } else {
-        existing.socketId = socket.id;
-        existing.level = level || existing.level;
-      }
+      if (!existing) room.players.push({ socketId: socket.id, userId, username, level: level||1, lp: lp||0, isBot: false });
+      else { existing.socketId = socket.id; }
 
       players.set(socket.id, { userId, username, roomId });
       socket.join(roomId);
 
       socket.emit('lobby:joined', {
-        roomId,
-        playerCount: room.players.length,
+        roomId, playerCount: room.players.length,
         players: room.players.map(p => ({ username: p.username, userId: p.userId })),
       });
 
-      // Zweiter Spieler da → Prämissen-Auswahl starten
       if (room.players.length === 2 && room.phase === 'waiting') {
         room.phase = 'selecting';
-        room.mistakes = {};
-        room.guesses = {};
-        room.confirmedPokemon = {};
-        room.premises = {};
-        room.premisePokemon = {};
         room.players.forEach(p => {
-          room.mistakes[p.userId] = 0;
-          room.guesses[p.userId] = [];
-          room.confirmedPokemon[p.userId] = [];
+          room.mistakes[p.userId] = 0; room.guesses[p.userId] = [];
+          room.confirmedPokemon[p.userId] = []; room.oppSuggestHistory[p.userId] = [];
         });
         emitToRoom(io, room, 'game:selectPremise', {
-          message: 'Beide Spieler sind da! Wähle deine Prämisse.',
+          message: 'Gegner gefunden! Wähle deine Prämisse.',
           players: room.players.map(p => ({ username: p.username, userId: p.userId })),
         });
       } else if (room.players.length === 2) {
         emitStateToAll(io, room);
       } else {
-        socket.emit('lobby:waiting', { message: 'Warte auf Mitspieler...' });
+        socket.emit('lobby:waiting', { message: 'Warte auf Mitspieler…' });
       }
     });
 
-    // ── Prämisse wählen ────────────────────────────────────────────────────
+    // ── Ranked Queue ───────────────────────────────────────────
+    socket.on('ranked:join', async ({ level, lp }) => {
+      if (rankedQueue.find(q => q.userId === userId)) return;
+      const entry = { userId, username, level: level||1, lp: lp||0, socketId: socket.id, joinedAt: Date.now() };
+      rankedQueue.push(entry);
+      socket.emit('ranked:queued', { position: rankedQueue.length });
+
+      // Bot-Fallback nach 15s
+      setTimeout(() => injectBot(io, entry), QUEUE_BOT_TIMEOUT);
+    });
+
+    socket.on('ranked:leave', () => {
+      rankedQueue = rankedQueue.filter(q => q.userId !== userId);
+      socket.emit('ranked:left');
+    });
+
+    // ── Prämisse wählen ───────────────────────────────────────
     socket.on('game:choosePremise', ({ premiseId }) => {
-      const playerInfo = players.get(socket.id);
-      if (!playerInfo) return;
-      const room = rooms.get(playerInfo.roomId);
+      const info = players.get(socket.id);
+      if (!info) return;
+      const room = rooms.get(info.roomId);
       if (!room || room.phase !== 'selecting') return;
 
       const premise = getPremiseById(premiseId);
       if (!premise) return socket.emit('error', { message: 'Unbekannte Prämisse' });
 
-      // Tier-Check (Level des wählenden Spielers)
       const player = room.players.find(p => p.userId === userId);
-      const maxTier = player.level >= 10 ? 2 : 1;
-      if (premise.tier > maxTier) {
+      const maxTier = getMaxTierForLevel(player?.level || 1);
+      if (premise.tier > maxTier)
         return socket.emit('error', { message: 'Prämisse noch nicht freigeschaltet' });
-      }
 
       room.premises[userId] = premiseId;
-      const pokemonList = getPokemonForPremise(premiseId);
-      room.premisePokemon[userId] = pokemonList;
+      room.premisePokemon[userId] = getPokemonForPremise(premiseId);
 
-      // Dem Wähler seine Pokémon-Liste schicken
       socket.emit('game:premiseConfirmed', {
-        premiseId,
-        label: premise.label,
-        pokemon: pokemonList.map(p => ({
+        premiseId, label: premise.label,
+        pokemon: room.premisePokemon[userId].map(p => ({
           id: p.id, name: p.name, nameDE: p.nameDE, sprite: p.sprite, types: p.types,
         })),
       });
 
-      // Beide gewählt? → Spiel starten
-      const bothChosen = room.players.every(p => room.premises[p.userId]);
-      if (bothChosen) {
-        room.phase = 'guessing';
-        room.startTime = Date.now();
-        // Zufälliger Startspieler
-        const startIdx = Math.floor(Math.random() * room.players.length);
-        room.currentTurn = room.players[startIdx].userId;
-        emitStateToAll(io, room);
-        emitToRoom(io, room, 'game:started', {
-          currentTurn: room.currentTurn,
-          currentTurnName: room.players[startIdx].username,
-        });
-      } else {
-        // Dem anderen sagen, dass der erste gewählt hat
-        const opponent = otherPlayer(room, userId);
-        if (opponent) {
-          const oppSocket = io.sockets.sockets.get(opponent.socketId);
-          if (oppSocket) oppSocket.emit('game:opponentChosePremise', { username });
-        }
+      const opp = otherPlayer(room, userId);
+      if (opp && !opp.isBot) {
+        const oppSocket = io.sockets.sockets.get(opp.socketId);
+        if (oppSocket) oppSocket.emit('game:opponentChosePremise', { username });
       }
+
+      if (room.players.every(p => room.premises[p.userId])) startGame(io, room);
     });
 
-    // ── Pokémon vorschlagen ────────────────────────────────────────────────
+    // ── Pokémon vorschlagen ────────────────────────────────────
     socket.on('game:suggestPokemon', ({ pokemonName }) => {
-      const playerInfo = players.get(socket.id);
-      if (!playerInfo) return;
-      const room = rooms.get(playerInfo.roomId);
+      const info = players.get(socket.id);
+      if (!info) return;
+      const room = rooms.get(info.roomId);
       if (!room || room.phase !== 'guessing') return;
       if (room.currentTurn !== userId) return socket.emit('error', { message: 'Du bist nicht dran' });
 
       const pokemon = findPokemonByName(pokemonName);
-      if (!pokemon) return socket.emit('error', { message: `Pokémon "${pokemonName}" nicht gefunden` });
+      if (!pokemon) return socket.emit('error', { message: `„${pokemonName}" nicht gefunden` });
 
-      const opponent = otherPlayer(room, userId);
-      if (!opponent) return;
-
-      // Wurde dieses Pokemon schon vorgeschlagen?
-      const alreadySuggested = room.guesses[userId].some(g => g.pokemonId === pokemon.id);
-      if (alreadySuggested) return socket.emit('error', { message: 'Dieses Pokémon hast du bereits vorgeschlagen' });
-
-      // Auto-Check: Trifft das Pokémon die Prämisse des Gegners?
-      const opponentPremiseId = room.premises[opponent.userId];
-      const matches = pokemonMatchesPremise(pokemon, opponentPremiseId);
-
-      const guessEntry = {
-        pokemonId: pokemon.id,
-        pokemonName: pokemon.nameDE,
-        pokemonSprite: pokemon.sprite,
-        pokemonTypes: pokemon.types,
-        result: matches ? 'yes' : 'no',
-        timestamp: Date.now(),
-      };
-      room.guesses[userId].push(guessEntry);
-
-      if (matches) {
-        // Bestätigtes Pokémon für den Ratenden sichtbar
-        room.confirmedPokemon[userId].push({
-          id: pokemon.id,
-          name: pokemon.nameDE,
-          sprite: pokemon.sprite,
-          types: pokemon.types,
-        });
-        // Spieler bleibt dran
-      } else {
-        // Zugwechsel
-        room.currentTurn = opponent.userId;
-      }
-
-      emitStateToAll(io, room);
-      emitToRoom(io, room, 'game:pokemonResult', {
-        suggestedBy: userId,
-        suggestedByName: username,
-        pokemon: { id: pokemon.id, name: pokemon.nameDE, sprite: pokemon.sprite, types: pokemon.types },
-        matches,
-        nextTurn: room.currentTurn,
-      });
+      performSuggestPokemon(io, room, userId, pokemon);
     });
 
-    // ── Prämisse raten ─────────────────────────────────────────────────────
+    // ── Prämisse raten ─────────────────────────────────────────
     socket.on('game:guessPremise', ({ premiseId }) => {
-      const playerInfo = players.get(socket.id);
-      if (!playerInfo) return;
-      const room = rooms.get(playerInfo.roomId);
+      const info = players.get(socket.id);
+      if (!info) return;
+      const room = rooms.get(info.roomId);
       if (!room || room.phase !== 'guessing') return;
       if (room.currentTurn !== userId) return socket.emit('error', { message: 'Du bist nicht dran' });
 
-      const opponent = otherPlayer(room, userId);
-      if (!opponent) return;
-
-      const opponentPremiseId = room.premises[opponent.userId];
-      const correct = premiseId === opponentPremiseId;
-
-      room.guesses[userId].push({
-        premiseGuess: premiseId,
-        premiseLabel: getPremiseById(premiseId)?.label || premiseId,
-        result: correct ? 'correct' : 'wrong',
-        timestamp: Date.now(),
-      });
-
-      if (correct) {
-        // Sieg!
-        room.phase = 'finished';
-        room.winner = userId;
-        emitStateToAll(io, room);
-        emitToRoom(io, room, 'game:over', {
-          winner: userId,
-          winnerName: username,
-          loser: opponent.userId,
-          loserName: opponent.username,
-          opponentPremise: getPremiseById(opponentPremiseId),
-          reason: 'correct_guess',
-        });
-        handleGameEnd(io, room, userId, opponent.userId);
-      } else {
-        room.mistakes[userId] = (room.mistakes[userId] || 0) + 1;
-
-        if (room.mistakes[userId] >= 3) {
-          // Verlierer durch 3 Fehlversuche
-          room.phase = 'finished';
-          room.winner = opponent.userId;
-          emitStateToAll(io, room);
-          emitToRoom(io, room, 'game:over', {
-            winner: opponent.userId,
-            winnerName: opponent.username,
-            loser: userId,
-            loserName: username,
-            opponentPremise: getPremiseById(opponentPremiseId),
-            reason: 'max_mistakes',
-          });
-          handleGameEnd(io, room, opponent.userId, userId);
-        } else {
-          // Zugwechsel nach Fehlversuch
-          room.currentTurn = opponent.userId;
-          emitStateToAll(io, room);
-          emitToRoom(io, room, 'game:wrongGuess', {
-            guessedBy: userId,
-            guessedByName: username,
-            premiseId,
-            premiseLabel: getPremiseById(premiseId)?.label,
-            mistakesLeft: 3 - room.mistakes[userId],
-            nextTurn: room.currentTurn,
-          });
-        }
-      }
+      const player = room.players.find(p => p.userId === userId);
+      performGuessPremise(io, room, userId, premiseId, player);
     });
 
-    // ── Rematch-Anfrage ────────────────────────────────────────────────────
+    // ── Rematch ────────────────────────────────────────────────
     socket.on('game:rematch', () => {
-      const playerInfo = players.get(socket.id);
-      if (!playerInfo) return;
-      const room = rooms.get(playerInfo.roomId);
+      const info = players.get(socket.id);
+      if (!info) return;
+      const room = rooms.get(info.roomId);
       if (!room || room.phase !== 'finished') return;
 
-      // Raum zurücksetzen
-      room.phase = 'selecting';
-      room.premises = {};
-      room.premisePokemon = {};
-      room.currentTurn = null;
-      room.winner = null;
-      room.startTime = null;
-      room.players.forEach(p => {
-        room.mistakes[p.userId] = 0;
-        room.guesses[p.userId] = [];
-        room.confirmedPokemon[p.userId] = [];
-      });
+      // Bots raus bei Rematch → neues privates Spiel
+      if (room.hasBot) {
+        socket.emit('lobby:waiting', { message: 'Suche neuen Gegner…' });
+        // Neues Ranked-Spiel anfragen
+        const player = room.players.find(p => p.userId === userId);
+        socket.emit('ranked:rematch');
+        return;
+      }
 
+      room.phase = 'selecting'; room.premises = {}; room.premisePokemon = {};
+      room.currentTurn = null; room.winner = null; room.startTime = null;
+      room.players.forEach(p => {
+        room.mistakes[p.userId] = 0; room.guesses[p.userId] = [];
+        room.confirmedPokemon[p.userId] = []; room.oppSuggestHistory[p.userId] = [];
+      });
       emitToRoom(io, room, 'game:selectPremise', {
         message: 'Rematch! Wähle deine neue Prämisse.',
         players: room.players.map(p => ({ username: p.username, userId: p.userId })),
+        isRanked: room.isRanked,
       });
     });
 
-    // ── Disconnect ─────────────────────────────────────────────────────────
+    // ── Disconnect ─────────────────────────────────────────────
     socket.on('disconnect', () => {
-      const playerInfo = players.get(socket.id);
-      if (!playerInfo) return;
-      const room = rooms.get(playerInfo.roomId);
+      rankedQueue = rankedQueue.filter(q => q.userId !== userId);
+      const info = players.get(socket.id);
       players.delete(socket.id);
-
+      if (!info) return;
+      const room = rooms.get(info.roomId);
       if (room && room.phase !== 'finished') {
-        const opponent = otherPlayer(room, userId);
-        if (opponent) {
-          const oppSocket = io.sockets.sockets.get(opponent.socketId);
-          if (oppSocket) oppSocket.emit('game:opponentDisconnected', { username });
+        const opp = otherPlayer(room, userId);
+        if (opp && !opp.isBot) {
+          const s = io.sockets.sockets.get(opp.socketId);
+          if (s) s.emit('game:opponentDisconnected', { username });
         }
-        // Raum nach 60s aufräumen wenn niemand reconnectet
-        setTimeout(() => {
-          const r = rooms.get(playerInfo.roomId);
-          if (r && r.players.every(p => !io.sockets.sockets.get(p.socketId))) {
-            rooms.delete(playerInfo.roomId);
-          }
-        }, 60_000);
       }
+      setTimeout(() => {
+        const r = rooms.get(info.roomId);
+        if (r && r.players.every(p => p.isBot || !io.sockets.sockets.get(p.socketId)))
+          rooms.delete(info.roomId);
+      }, 60_000);
     });
+
+    socket.on('error', () => {});
   });
 };
-
-// ─── XP nach Spielende vergeben ───────────────────────────────────────────────
-async function handleGameEnd(io, room, winnerId, loserId) {
-  try {
-    const User = require('../models/User');
-    const [winner, loser] = await Promise.all([
-      User.findById(winnerId),
-      User.findById(loserId),
-    ]);
-    if (winner) {
-      winner.addXp(50);
-      winner.stats.wins += 1;
-      winner.stats.gamesPlayed += 1;
-      await winner.save();
-    }
-    if (loser) {
-      loser.addXp(10);
-      loser.stats.losses += 1;
-      loser.stats.gamesPlayed += 1;
-      await loser.save();
-    }
-    // Aktualisierte Stats an Spieler senden
-    for (const p of room.players) {
-      const sock = io.sockets.sockets.get(p.socketId);
-      const user = p.userId === winnerId ? winner : loser;
-      if (sock && user) {
-        sock.emit('user:statsUpdated', {
-          level: user.level,
-          xp: user.xp,
-          xpToNext: user.xpToNextLevel(),
-          stats: user.stats,
-        });
-      }
-    }
-  } catch (e) {
-    console.error('XP-Vergabe fehlgeschlagen:', e);
-  }
-}
