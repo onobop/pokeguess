@@ -256,7 +256,33 @@ button:active { transform: scale(.97); }
 .ranked-league-display {
   display: flex; align-items: center; gap: 16px;
 }
-.league-icon { font-size: 2.5rem; }
+/* Liga-Sprites */
+.league-icon-lg {
+  width: 64px; height: 64px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.5));
+}
+.league-icon-sm {
+  width: 22px; height: 22px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  vertical-align: middle;
+}
+
+/* Beleber-Sterne */
+.league-stars {
+  display: flex; align-items: center; gap: 3px; margin-top: 5px;
+}
+.star-img {
+  width: 20px; height: 20px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transition: opacity .25s;
+}
+.star-empty { opacity: 0.18; filter: grayscale(1); }
+
 .league-name { font-size: 1.1rem; font-weight: 800; }
 .lp-display  { color: var(--text-muted); font-size: .9rem; }
 .lp-bar-wrap {
@@ -332,6 +358,11 @@ button:active { transform: scale(.97); }
 .lb-table tr:hover td { background: var(--bg2); }
 .lb-rank  { font-weight: 800; color: var(--accent); width: 32px; }
 .lb-me td { background: rgba(59,130,246,.1) !important; }
+.lb-league-cell { display: flex; align-items: center; gap: 6px; }
+.lb-ball-icon {
+  width: 28px; height: 28px;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
 
 /* Friends */
 .friends-main { max-width: 520px; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 12px; }

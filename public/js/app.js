@@ -5,9 +5,18 @@
 const API = '';
 let socket = null;
 
-const LEAGUE_ICONS  = ['🏀','💎','🔮','👑'];
-const LEAGUE_NAMES  = ['Pokéball','Superball','Hyperball','Meisterball'];
-const LEAGUE_MAX_LP = [300, 600, 900, 1200]; // LP bis zum nächsten Aufstieg
+const LEAGUE_NAMES   = ['Pokéball','Superball','Hyperball','Meisterball'];
+const LEAGUE_STARTS  = [0, 300, 600, 900];   // LP-Einstieg je Liga
+
+// PokeAPI Item-Sprites
+const CDN = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/';
+const LEAGUE_SPRITES = [
+  CDN + 'poke-ball.png',
+  CDN + 'great-ball.png',
+  CDN + 'ultra-ball.png',
+  CDN + 'master-ball.png',
+];
+const REVIVE_SPRITE = CDN + 'revive.png';
 
 const state = {
   token:   localStorage.getItem('pg_token'),
@@ -55,29 +64,47 @@ function leagueClass(idx) {
   return ['','l1','l2','l3'][idx] || '';
 }
 
-function updateLeagueUI(lp, league) {
-  const idx  = league?.leagueIdx ?? 0;
-  const name = LEAGUE_NAMES[idx];
-  const icon = LEAGUE_ICONS[idx];
-  const max  = LEAGUE_MAX_LP[idx];
-  const pct  = Math.min(100, (lp / max) * 100);
+/** Wie viele Beleber-Sterne (1–3) hat man in der aktuellen Liga? */
+function getLeagueStars(lp, leagueIdx) {
+  const start    = LEAGUE_STARTS[Math.min(leagueIdx, 3)];
+  const lpInLeag = Math.max(0, lp - start);
+  return Math.min(3, Math.floor(lpInLeag / 100) + 1);
+}
 
-  // Topbar badges
-  ['ui-league'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.textContent = name; el.className = `league-badge ${leagueClass(idx)}`; }
-  });
+/** 3 Beleber-Sprites: ausgefüllt = filled, leer = ausgegraut */
+function starsHTML(filled) {
+  return Array.from({ length: 3 }, (_, i) =>
+    `<img src="${REVIVE_SPRITE}" class="star-img${i < filled ? '' : ' star-empty'}" alt="★" />`
+  ).join('');
+}
+
+function updateLeagueUI(lp, league) {
+  const idx    = league?.leagueIdx ?? 0;
+  const name   = LEAGUE_NAMES[idx];
+  const sprite = LEAGUE_SPRITES[idx];
+  const stars  = getLeagueStars(lp, idx);
+  // LP-Fortschritt innerhalb der aktuellen Liga (0–300)
+  const lpInLeag = Math.max(0, lp - LEAGUE_STARTS[idx]);
+  const pct      = Math.min(100, (lpInLeag / 300) * 100);
+
+  // Topbar: kleines Ball-Icon + Liga-Badge + LP
+  const iconSm = document.getElementById('ui-league-icon');
+  if (iconSm) iconSm.src = sprite;
+  const leagueEl = document.getElementById('ui-league');
+  if (leagueEl) { leagueEl.textContent = name; leagueEl.className = `league-badge ${leagueClass(idx)}`; }
   const lpEl = document.getElementById('ui-lp');
   if (lpEl) lpEl.textContent = `${lp} LP`;
 
   // Ranked Card
   const riEl = document.getElementById('ranked-league-icon');
+  if (riEl) riEl.src = sprite;
   const rnEl = document.getElementById('ranked-league-name');
-  const rlEl = document.getElementById('ranked-lp-display');
-  const rbEl = document.getElementById('ranked-lp-bar');
-  if (riEl) riEl.textContent = icon;
   if (rnEl) rnEl.textContent = `${name}-Liga`;
+  const rlEl = document.getElementById('ranked-lp-display');
   if (rlEl) rlEl.textContent = `${lp} LP`;
+  const starsEl = document.getElementById('ranked-league-stars');
+  if (starsEl) starsEl.innerHTML = starsHTML(stars);
+  const rbEl = document.getElementById('ranked-lp-bar');
   if (rbEl) rbEl.style.width = `${pct}%`;
 }
 
@@ -479,7 +506,10 @@ async function showLeaderboard(scope = 'world') {
         <td><strong>${u.username}</strong></td>
         <td>Lv.${u.level}</td>
         <td><strong>${u.lp}</strong> LP</td>
-        <td><span class="league-badge ${leagueClass(u.leagueIdx)}">${u.leagueName}</span></td>
+        <td class="lb-league-cell">
+          <img src="${LEAGUE_SPRITES[u.leagueIdx] || LEAGUE_SPRITES[0]}" class="lb-ball-icon" alt="${u.leagueName}" title="${u.leagueName}" />
+          <span class="league-badge ${leagueClass(u.leagueIdx)}">${u.leagueName}</span>
+        </td>
         <td>${u.wins}</td>
         <td>${u.rankedWins}</td>
       </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:#555;padding:20px">Noch keine Einträge</td></tr>';
