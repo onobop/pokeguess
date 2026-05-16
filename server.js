@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 // ─── Pflicht-Env-Vars prüfen ──────────────────────────────────────────────────
-['JWT_SECRET', 'MONGODB_URI'].forEach(k => {
+['JWT_SECRET', 'MONGODB_URI', 'ADMIN_KEY'].forEach(k => {
   if (!process.env[k]) console.warn(`⚠️  Env-Variable ${k} ist nicht gesetzt!`);
 });
 const express    = require('express');
@@ -27,6 +27,7 @@ app.use('/api/auth',        require('./routes/auth'));
 app.use('/api',             require('./routes/api'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/friends',     require('./routes/friends'));
+app.use('/admin',           require('./routes/admin'));
 
 // ─── Pokémon-Daten prüfen ─────────────────────────────────────────────────────
 const enrichedPath = path.join(__dirname, 'data/pokemon-enriched.json');

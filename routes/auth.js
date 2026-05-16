@@ -22,7 +22,8 @@ router.post('/register', async (req, res) => {
     if (exists)
       return res.status(409).json({ error: 'Benutzername bereits vergeben' });
 
-    const user = await User.create({ username, password });
+    const ip = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    const user = await User.create({ username, password, lastIp: ip });
     res.status(201).json({ token: makeToken(user), user: publicUser(user) });
   } catch (err) {
     console.error('[register error]', err.message);
@@ -42,6 +43,9 @@ router.post('/login', async (req, res) => {
     if (!user || !(await user.comparePassword(password)))
       return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
+    const ip = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    user.lastIp = ip;
+    await user.save();
     res.json({ token: makeToken(user), user: publicUser(user) });
   } catch (err) {
     console.error('[login error]', err.message);

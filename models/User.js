@@ -32,6 +32,9 @@ const userSchema = new mongoose.Schema({
     leagueName: { type: String, default: 'Pokéball' },
   },
 
+  // Meta
+  lastIp: { type: String, default: '' },
+
   // RocketCoins
   coins: { type: Number, default: 0 },
 
