@@ -240,6 +240,7 @@ function performGuessPremise(io, room, userId, premiseId, playerRef) {
       emitStateToAll(io, room);
       emitToRoom(io, room, 'game:wrongGuess', {
         guessedBy: userId,
+        premiseId: premiseId,
         premiseLabel: label,
         mistakesLeft: 3 - room.mistakes[userId],
         nextTurn: room.currentTurn,

@@ -125,6 +125,7 @@ button:active { transform: scale(.97); }
 .auth-box .logo { margin-bottom: 6px; }
 .tab-bar {
   display: flex;
+  align-items: center;
   gap: 4px;
   background: var(--bg3);
   border-radius: var(--radius);
@@ -753,6 +754,22 @@ button:active { transform: scale(.97); }
   cursor: pointer; transition: all .15s; flex-shrink: 0;
 }
 .btn-surrender:hover { background: rgba(239,68,68,.28); }
+
+/* ── Language Toggle ─────────────────────────────────────────── */
+.btn-lang-toggle {
+  padding: 4px 10px;
+  background: rgba(255,203,5,.1);
+  color: var(--accent);
+  border: 1px solid rgba(255,203,5,.3);
+  border-radius: 20px;
+  font-size: .78rem; font-weight: 700;
+  cursor: pointer; transition: all .15s; flex-shrink: 0;
+  letter-spacing: .03em;
+}
+.btn-lang-toggle:hover { background: rgba(255,203,5,.22); }
+
+/* Auth screen lang toggle positioning */
+.tab-bar .btn-lang-toggle { margin-left: auto; }
 
 .mistake-counters {
   display: flex;

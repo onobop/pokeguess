@@ -12,21 +12,22 @@
 <div id="screen-auth" class="screen active">
   <div class="auth-box">
     <div class="logo"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
-    <p class="tagline">Errate die Prämisse deines Gegners!</p>
+    <p class="tagline" data-i18n="auth.tagline">Errate die Prämisse deines Gegners!</p>
     <div class="tab-bar">
-      <button class="tab active" data-tab="login">Login</button>
-      <button class="tab" data-tab="register">Registrieren</button>
+      <button class="tab active" data-tab="login" data-i18n="auth.tab.login">Login</button>
+      <button class="tab" data-tab="register" data-i18n="auth.tab.register">Registrieren</button>
+      <button class="btn-lang-toggle" id="btn-lang-toggle-auth">🇬🇧 EN</button>
     </div>
     <form id="form-login" class="auth-form active">
-      <input type="text"     id="login-username" placeholder="Benutzername" autocomplete="username" required/>
-      <input type="password" id="login-password" placeholder="Passwort" autocomplete="current-password" required/>
-      <button type="submit" class="btn-primary">Einloggen</button>
+      <input type="text"     id="login-username" data-i18n-ph="auth.login.ph.user" placeholder="Benutzername" autocomplete="username" required/>
+      <input type="password" id="login-password" data-i18n-ph="auth.login.ph.pass" placeholder="Passwort" autocomplete="current-password" required/>
+      <button type="submit" class="btn-primary" data-i18n="auth.login.submit">Einloggen</button>
       <p class="auth-error" id="login-error"></p>
     </form>
     <form id="form-register" class="auth-form">
-      <input type="text"     id="reg-username" placeholder="Benutzername (3–20 Zeichen)" required/>
-      <input type="password" id="reg-password" placeholder="Passwort (min. 6 Zeichen)" required/>
-      <button type="submit" class="btn-primary">Account erstellen</button>
+      <input type="text"     id="reg-username" data-i18n-ph="auth.register.ph.user" placeholder="Benutzername (3–20 Zeichen)" required/>
+      <input type="password" id="reg-password" data-i18n-ph="auth.register.ph.pass" placeholder="Passwort (min. 6 Zeichen)" required/>
+      <button type="submit" class="btn-primary" data-i18n="auth.register.submit">Account erstellen</button>
       <p class="auth-error" id="reg-error"></p>
     </form>
   </div>
@@ -44,30 +45,31 @@
       <span class="league-badge" id="ui-league">Pokéball</span>
       <span class="lp-badge" id="ui-lp">0 LP</span>
       <span class="coins-badge" id="ui-coins">🪙 0</span>
-      <button class="btn-sm" id="btn-logout">Logout</button>
+      <button class="btn-lang-toggle" id="btn-lang-toggle">🇬🇧 EN</button>
+      <button class="btn-sm" id="btn-logout" data-i18n="btn.logout">Logout</button>
     </div>
   </header>
 
   <main class="home-main">
     <!-- Tabs: Privat / Ranked -->
     <div class="home-tabs">
-      <button class="home-tab active" data-htab="private">🔴 Privates Spiel</button>
-      <button class="home-tab"        data-htab="ranked">⚔ Ranked</button>
+      <button class="home-tab active" data-htab="private" data-i18n="home.tab.private">🔴 Privates Spiel</button>
+      <button class="home-tab"        data-htab="ranked"  data-i18n="home.tab.ranked">⚔ Ranked</button>
     </div>
 
     <!-- Privat -->
     <div class="home-panel active" id="htab-private">
       <div class="lobby-card">
-        <label>Raum-Code:</label>
+        <label data-i18n="lobby.label.code">Raum-Code:</label>
         <div class="room-input-row">
-          <input type="text" id="room-code" placeholder="z.B. PIKA42" maxlength="10"/>
-          <button class="btn-primary" id="btn-join">Beitreten / Erstellen</button>
+          <input type="text" id="room-code" data-i18n-ph="lobby.ph.code" placeholder="z.B. PIKA42" maxlength="10"/>
+          <button class="btn-primary" id="btn-join" data-i18n="btn.join">Beitreten / Erstellen</button>
         </div>
-        <button class="btn-secondary" id="btn-random-room">Zufälliger Code</button>
+        <button class="btn-secondary" id="btn-random-room" data-i18n="btn.random">Zufälliger Code</button>
       </div>
       <div id="lobby-status" class="lobby-status hidden">
         <div class="spinner"></div>
-        <p id="lobby-status-text">Warte auf Mitspieler…</p>
+        <p id="lobby-status-text" data-i18n="lobby.waiting">Warte auf Mitspieler…</p>
       </div>
     </div>
 
@@ -85,28 +87,28 @@
         <div class="lp-bar-wrap">
           <div class="lp-bar-fill" id="ranked-lp-bar"></div>
         </div>
-        <button class="btn-ranked" id="btn-ranked">⚔ Ranked Match suchen</button>
+        <button class="btn-ranked" id="btn-ranked" data-i18n="btn.ranked">⚔ Ranked Match suchen</button>
         <div id="ranked-queue-status" class="hidden">
           <div class="spinner"></div>
-          <p class="blink-text">Suche Gegner<span id="queue-dots">…</span></p>
-          <button class="btn-sm" id="btn-leave-queue">Abbrechen</button>
+          <p class="blink-text"><span data-i18n="ranked.searching">Suche Gegner</span><span id="queue-dots">…</span></p>
+          <button class="btn-sm" id="btn-leave-queue" data-i18n="btn.leave.queue">Abbrechen</button>
         </div>
       </div>
     </div>
 
     <!-- Bottom Nav -->
     <div class="home-bottom-nav">
-      <button class="nav-btn" id="btn-leaderboard">🏆 Bestenliste</button>
+      <button class="nav-btn" id="btn-leaderboard" data-i18n="btn.leaderboard">🏆 Bestenliste</button>
       <button class="nav-btn" id="btn-friends">👥 Freunde <span id="friend-badge" class="badge hidden">!</span></button>
     </div>
 
     <!-- Stats -->
     <div class="stats-card">
       <div class="stats-grid">
-        <div><span id="stat-wins">0</span><small>Siege</small></div>
-        <div><span id="stat-losses">0</span><small>Niederlagen</small></div>
-        <div><span id="stat-ranked-wins">0</span><small>Ranked-Siege</small></div>
-        <div><span id="stat-games">0</span><small>Spiele</small></div>
+        <div><span id="stat-wins">0</span><small data-i18n="stat.wins">Siege</small></div>
+        <div><span id="stat-losses">0</span><small data-i18n="stat.losses">Niederlagen</small></div>
+        <div><span id="stat-ranked-wins">0</span><small data-i18n="stat.ranked.wins">Ranked-Siege</small></div>
+        <div><span id="stat-games">0</span><small data-i18n="stat.games">Spiele</small></div>
       </div>
     </div>
 
@@ -115,23 +117,23 @@
       <div class="pokedex-header">
         <div class="pokedex-title-row">
           <span class="pokedex-icon">🔴</span>
-          <h3>Mein Pokédex</h3>
+          <h3 data-i18n="dex.title">Mein Pokédex</h3>
           <span class="dex-count-badge" id="dex-count-badge">0 gefangen</span>
         </div>
         <div class="coins-info">
           <span class="coins-big" id="dex-coins-display">🪙 0</span>
-          <span class="coins-hint">Coins</span>
+          <span class="coins-hint" data-i18n="dex.coins.label">Coins</span>
         </div>
       </div>
-      <p class="dex-hint">Pokémon, die du in Spielen korrekt als zur Gegner-Prämisse passend erkannt hast.</p>
+      <p class="dex-hint" data-i18n="dex.hint">Pokémon, die du in Spielen korrekt als zur Gegner-Prämisse passend erkannt hast.</p>
       <div class="pokedex-grid" id="pokedex-grid">
-        <p class="muted-text dex-empty-msg">Noch keine Pokémon gefangen – spiele eine Runde!</p>
+        <p class="muted-text dex-empty-msg" data-i18n="dex.empty">Noch keine Pokémon gefangen – spiele eine Runde!</p>
       </div>
     </div>
 
     <!-- ════ ANDERE SPIELE ════ -->
     <div class="other-games-section">
-      <p class="section-label">WEITERE SPIELE VON PIXELPOOPER</p>
+      <p class="section-label" data-i18n="games.section.label">WEITERE SPIELE VON PIXELPOOPER</p>
       <div class="other-games-row">
         <a href="https://poketype.pixelpooper.com/" target="_blank" class="game-link-btn poketype-btn">
           <img src="/img/poketype-logo.png" alt="PokéType" class="game-logo-img"/>
@@ -149,7 +151,7 @@
       </div>
     </div>
 
-    <div class="home-legal">
+    <div class="home-legal" data-i18n="legal">
       Pokémon and all related names are trademarks of Nintendo, Game Freak, and The Pokémon Company.
       Not affiliated with ©Nintendo or ©Pokémon Company. For entertainment purposes only.
     </div>
@@ -159,21 +161,21 @@
 <!-- ════════════════════════ POKÉDEX SHINY MODAL ════════════════════════ -->
 <div id="dex-modal" class="dex-modal hidden">
   <div class="dex-modal-box">
-    <button class="dex-modal-close" id="btn-dex-close">✕</button>
+    <button class="dex-modal-close" id="btn-dex-close" data-i18n="btn.dex.close">✕</button>
     <div class="dex-modal-sprites">
       <div class="dex-sprite-wrap">
         <img id="dex-modal-normal" src="" alt="" class="dex-sprite-big"/>
-        <span class="dex-sprite-label">Normal</span>
+        <span class="dex-sprite-label" data-i18n="dex.modal.label.normal">Normal</span>
       </div>
       <div class="dex-sprite-wrap">
         <img id="dex-modal-shiny" src="" alt="" class="dex-sprite-big dex-shiny-preview"/>
-        <span class="dex-sprite-label shiny-label">✨ Shiny</span>
+        <span class="dex-sprite-label shiny-label" data-i18n="dex.modal.label.shiny">✨ Shiny</span>
       </div>
     </div>
     <h3 id="dex-modal-name">Pikachu</h3>
     <div class="dex-modal-types" id="dex-modal-types"></div>
     <div class="dex-modal-owned" id="dex-modal-owned"></div>
-    <button class="btn-shiny-buy" id="btn-buy-shiny" disabled>✨ Shiny kaufen</button>
+    <button class="btn-shiny-buy" id="btn-buy-shiny" disabled data-i18n="btn.buy.shiny">✨ Shiny kaufen</button>
   </div>
 </div>
 
@@ -185,13 +187,14 @@
       <span id="sel-username"></span>
       <span class="level-badge" id="sel-level">Lv.1</span>
       <span class="ranked-badge-sm hidden" id="sel-ranked-badge">⚔ RANKED</span>
+      <button class="btn-lang-toggle" id="btn-lang-toggle-sel">🇬🇧 EN</button>
     </div>
   </header>
   <main class="select-main">
-    <h2>Wähle deine Prämisse</h2>
-    <p class="hint-text" id="sel-opponent-hint">Dein Gegner wählt auch gerade…</p>
+    <h2 data-i18n="select.heading">Wähle deine Prämisse</h2>
+    <p class="hint-text" id="sel-opponent-hint" data-i18n="select.opp.hint">Dein Gegner wählt auch gerade…</p>
     <div class="premise-search-bar">
-      <input type="text" id="premise-search" placeholder="Prämisse suchen…"/>
+      <input type="text" id="premise-search" data-i18n-ph="select.ph.search" placeholder="Prämisse suchen…"/>
     </div>
     <div class="category-tabs" id="category-tabs"></div>
     <div id="premise-list" class="premise-list"></div>
@@ -199,8 +202,8 @@
       <div class="preview-header">
         <h3 id="preview-title"></h3>
         <span id="preview-count" class="count-badge"></span>
-        <button class="btn-primary" id="btn-confirm-premise">Diese Prämisse wählen ✓</button>
-        <button class="btn-ghost"   id="btn-cancel-preview">Abbrechen</button>
+        <button class="btn-primary" id="btn-confirm-premise" data-i18n="btn.confirm.premise">Diese Prämisse wählen ✓</button>
+        <button class="btn-ghost"   id="btn-cancel-preview"  data-i18n="btn.cancel.preview">Abbrechen</button>
       </div>
       <div id="preview-pokemon-grid" class="pokemon-mini-grid"></div>
     </div>
@@ -211,13 +214,14 @@
 <div id="screen-game" class="screen">
   <header class="topbar">
     <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
-    <div class="turn-indicator" id="turn-indicator">Warte…</div>
+    <div class="turn-indicator" id="turn-indicator" data-i18n="game.waiting">Warte…</div>
     <span class="timer-count" id="timer-count"></span>
     <div class="mistake-counters">
-      <span>Du: <span id="my-mistakes">0</span>/3 ✗</span>
-      <span>Gegner: <span id="opp-mistakes">0</span>/3 ✗</span>
+      <span><span data-i18n="game.mistakes.me">Du:</span> <span id="my-mistakes">0</span><span data-i18n="game.mistakes.suffix">/3 ✗</span></span>
+      <span><span data-i18n="game.mistakes.opp">Gegner:</span> <span id="opp-mistakes">0</span><span data-i18n="game.mistakes.suffix">/3 ✗</span></span>
     </div>
-    <button class="btn-surrender" id="btn-surrender" title="Runde aufgeben">🏳 Aufgeben</button>
+    <button class="btn-surrender" id="btn-surrender" data-i18n="btn.surrender" data-i18n-title="btn.surrender">🏳 Aufgeben</button>
+    <button class="btn-lang-toggle" id="btn-lang-toggle-game">🇬🇧 EN</button>
   </header>
   <div class="turn-timer-bar">
     <div class="turn-timer-fill" id="timer-fill"></div>
@@ -226,11 +230,11 @@
   <div class="game-layout">
     <aside class="panel panel-left">
       <div class="panel-section">
-        <h4>Meine Prämisse</h4>
+        <h4 data-i18n="game.my.premise">Meine Prämisse</h4>
         <div class="premise-badge" id="my-premise-badge">–</div>
       </div>
       <div class="panel-section">
-        <h4>Gegner fragt mich <span class="count-badge" id="opp-suggest-count">0</span></h4>
+        <h4><span data-i18n="game.opp.asks">Gegner fragt mich</span> <span class="count-badge" id="opp-suggest-count">0</span></h4>
         <div id="opp-suggest-list" class="opp-history"></div>
       </div>
     </aside>
@@ -238,34 +242,34 @@
     <main class="game-center">
       <div class="input-area" id="input-area">
         <div class="input-tabs">
-          <button class="input-tab active" data-mode="pokemon">Pokémon vorschlagen</button>
-          <button class="input-tab" data-mode="premise">Prämisse raten</button>
+          <button class="input-tab active" data-mode="pokemon" data-i18n="tab.pokemon">Pokémon vorschlagen</button>
+          <button class="input-tab" data-mode="premise" data-i18n="tab.premise">Prämisse raten</button>
         </div>
         <div class="input-panel active" id="panel-pokemon">
           <div class="search-wrap">
-            <input type="text" id="pokemon-search-input" placeholder="Pokémon-Name…" autocomplete="off"/>
+            <input type="text" id="pokemon-search-input" data-i18n-ph="game.ph.pokemon" placeholder="Pokémon-Name…" autocomplete="off"/>
             <div id="pokemon-suggestions" class="suggestions hidden"></div>
           </div>
-          <button class="btn-primary" id="btn-suggest">Vorschlagen →</button>
+          <button class="btn-primary" id="btn-suggest" data-i18n="btn.suggest">Vorschlagen →</button>
         </div>
         <div class="input-panel" id="panel-premise">
-          <p class="warn-text">⚠️ Falsch raten = Fehlversuch! (max. 3)</p>
+          <p class="warn-text" data-i18n="game.warn.mistakes">⚠️ Falsch raten = Fehlversuch! (max. 3)</p>
           <div class="premise-search-bar">
-            <input type="text" id="guess-premise-search" placeholder="Prämisse suchen…"/>
+            <input type="text" id="guess-premise-search" data-i18n-ph="game.ph.guess" placeholder="Prämisse suchen…"/>
           </div>
           <div id="guess-premise-list" class="premise-list compact"></div>
-          <button class="btn-danger" id="btn-guess-premise" disabled>Prämisse raten!</button>
+          <button class="btn-danger" id="btn-guess-premise" disabled data-i18n="btn.guess.premise">Prämisse raten!</button>
         </div>
       </div>
       <div class="guess-history">
-        <h4>Meine Vorschläge <span class="count-badge" id="confirmed-count">0</span> ✓</h4>
+        <h4><span data-i18n="game.my.guesses">Meine Vorschläge</span> <span class="count-badge" id="confirmed-count">0</span> ✓</h4>
         <div id="history-list"></div>
       </div>
     </main>
 
     <aside class="panel panel-right">
-      <h4>Bestätigte Pokémon</h4>
-      <p class="hint-text" style="font-size:.75rem">Pokémon die zum Gegner passen</p>
+      <h4 data-i18n="game.confirmed.title">Bestätigte Pokémon</h4>
+      <p class="hint-text" style="font-size:.75rem" data-i18n="game.confirmed.hint">Pokémon die zum Gegner passen</p>
       <div id="confirmed-pokemon-list" class="confirmed-list"></div>
     </aside>
   </div>
@@ -280,8 +284,8 @@
     <div class="result-details" id="result-details"></div>
     <div class="result-rewards" id="result-rewards"></div>
     <div class="result-buttons">
-      <button class="btn-primary"   id="btn-rematch">Rematch!</button>
-      <button class="btn-secondary" id="btn-back-lobby">Hauptmenü</button>
+      <button class="btn-primary"   id="btn-rematch"    data-i18n="btn.rematch">Rematch!</button>
+      <button class="btn-secondary" id="btn-back-lobby" data-i18n="btn.back.lobby">Hauptmenü</button>
     </div>
   </div>
 </div>
@@ -290,16 +294,25 @@
 <div id="screen-leaderboard" class="screen">
   <header class="topbar">
     <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
-    <button class="btn-sm" id="btn-lb-back">← Zurück</button>
+    <button class="btn-sm" id="btn-lb-back" data-i18n="btn.lb.back">← Zurück</button>
+    <button class="btn-lang-toggle" id="btn-lang-toggle-lb">🇬🇧 EN</button>
   </header>
   <main class="lb-main">
-    <h2>🏆 Bestenliste</h2>
+    <h2 data-i18n="lb.title">🏆 Bestenliste</h2>
     <div class="lb-tabs">
-      <button class="lb-tab active" data-scope="world">🌍 Welt</button>
-      <button class="lb-tab" data-scope="friends">👥 Freunde</button>
+      <button class="lb-tab active" data-scope="world"   data-i18n="lb.tab.world">🌍 Welt</button>
+      <button class="lb-tab"        data-scope="friends" data-i18n="lb.tab.friends">👥 Freunde</button>
     </div>
     <table class="lb-table">
-      <thead><tr><th>#</th><th>Trainer</th><th>Lv</th><th>LP</th><th>Liga</th><th>Siege</th><th>Ranked</th></tr></thead>
+      <thead><tr>
+        <th data-i18n="lb.col.rank">#</th>
+        <th data-i18n="lb.col.trainer">Trainer</th>
+        <th data-i18n="lb.col.lv">Lv</th>
+        <th data-i18n="lb.col.lp">LP</th>
+        <th data-i18n="lb.col.league">Liga</th>
+        <th data-i18n="lb.col.wins">Siege</th>
+        <th data-i18n="lb.col.ranked">Ranked</th>
+      </tr></thead>
       <tbody id="lb-body"></tbody>
     </table>
   </main>
@@ -309,19 +322,20 @@
 <div id="screen-friends" class="screen">
   <header class="topbar">
     <div class="logo-sm"><span class="logo-poke">Poké</span><span class="logo-guess">Guess</span></div>
-    <button class="btn-sm" id="btn-friends-back">← Zurück</button>
+    <button class="btn-sm" id="btn-friends-back" data-i18n="btn.friends.back">← Zurück</button>
+    <button class="btn-lang-toggle" id="btn-lang-toggle-friends">🇬🇧 EN</button>
   </header>
   <main class="friends-main">
-    <h2>👥 Freunde</h2>
+    <h2 data-i18n="friends.title">👥 Freunde</h2>
     <div class="friend-search-row">
-      <input type="text" id="friend-search-input" placeholder="Trainer suchen…" maxlength="20"/>
-      <button class="btn-primary btn-sm" id="btn-friend-search">Suchen</button>
+      <input type="text" id="friend-search-input" data-i18n-ph="friends.ph.search" placeholder="Trainer suchen…" maxlength="20"/>
+      <button class="btn-primary btn-sm" id="btn-friend-search" data-i18n="btn.friend.search">Suchen</button>
     </div>
     <div id="friend-search-results" class="friend-results hidden"></div>
-    <p class="section-label">ANFRAGEN</p>
+    <p class="section-label" data-i18n="friends.sec.requests">ANFRAGEN</p>
     <div id="friend-requests-list"></div>
-    <p class="section-label">FREUNDESLISTE</p>
-    <div id="friends-list"><p class="muted-text">Noch keine Freunde</p></div>
+    <p class="section-label" data-i18n="friends.sec.list">FREUNDESLISTE</p>
+    <div id="friends-list"><p class="muted-text" data-i18n="friends.no.friends">Noch keine Freunde</p></div>
   </main>
 </div>
 
@@ -337,13 +351,13 @@
       />
     </div>
     <div class="tutorial-right">
-      <div class="tutorial-namebox">Prof. Eich</div>
+      <div class="tutorial-namebox" id="tutorial-namebox" data-i18n="tutorial.name">Prof. Eich</div>
       <div class="tutorial-textbox">
         <p id="tutorial-text"></p>
       </div>
       <div class="tutorial-footer">
         <div class="tutorial-dots" id="tutorial-dots"></div>
-        <button class="btn-tutorial-next" id="btn-tutorial-next">Weiter ▶</button>
+        <button class="btn-tutorial-next" id="btn-tutorial-next" data-i18n="btn.tutorial.next">Weiter ▶</button>
       </div>
     </div>
   </div>
@@ -352,6 +366,7 @@
 <div id="toast-container"></div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/js/i18n.js"></script>
 <script src="/js/app.js"></script>
 
 <!-- Ko-Fi Widget -->

@@ -24,6 +24,7 @@ router.post('/register', async (req, res) => {
     const user = await User.create({ username, password });
     res.status(201).json({ token: makeToken(user), user: publicUser(user) });
   } catch (err) {
+    console.error('[register]', err);
     res.status(500).json({ error: 'Serverfehler' });
   }
 });
@@ -37,7 +38,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
     res.json({ token: makeToken(user), user: publicUser(user) });
-  } catch {
+  } catch (err) {
+    console.error('[login]', err);
     res.status(500).json({ error: 'Serverfehler' });
   }
 });

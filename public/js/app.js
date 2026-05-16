@@ -5,7 +5,6 @@
 const API = '';
 let socket = null;
 
-const LEAGUE_NAMES   = ['Pokéball','Superball','Hyperball','Meisterball'];
 const LEAGUE_STARTS  = [0, 300, 600, 900];   // LP-Einstieg je Liga
 
 // PokeAPI Item-Sprites
@@ -34,13 +33,6 @@ const TURN_SECONDS = 20;
 let   turnTimerInterval = null;
 let   lastTurnOwner     = null;
 
-// Pokémon-Pool für Auto-Vorschlag wenn Zeit abläuft
-const AUTO_SUGGEST_POOL = [
-  'Pikachu','Relaxo','Gengar','Turtok','Bisaflor','Glurak','Arkani',
-  'Mewtu','Garados','Lapras','Raichu','Machomei','Evoli','Flareon','Aquana',
-  'Ditto','Eevee','Snorlax','Mewtwo','Blastoise',
-];
-
 function startTurnTimer() {
   clearTurnTimer();
   let seconds = TURN_SECONDS;
@@ -51,7 +43,7 @@ function startTurnTimer() {
   // CSS-Animation neu starten
   if (fill) {
     fill.classList.remove('running');
-    void fill.getBoundingClientRect(); // reflow erzwingen
+    void fill.getBoundingClientRect();
     fill.classList.add('running');
   }
 
@@ -83,9 +75,8 @@ function clearTurnTimer() {
 }
 
 function autoSuggestOnTimeout() {
-  // Kein Auto-Vorschlag – Zug einfach abgeben
   if (!state.gameState || state.gameState.phase !== 'guessing') return;
-  toast('⏱ Zeit abgelaufen – Zug weitergegeben', 'info', 2500);
+  toast(t('toast.time.up'), 'info', 2500);
   lastTurnOwner = null;
   socket.emit('game:passTurn');
 }
@@ -112,44 +103,38 @@ async function apiFetch(path, opts = {}) {
   return data;
 }
 
-const TYPE_DE = {
-  normal:'Normal', fire:'Feuer', water:'Wasser', grass:'Pflanze',
-  electric:'Elektro', ice:'Eis', fighting:'Kampf', poison:'Gift',
-  ground:'Boden', flying:'Flug', psychic:'Psycho', bug:'Käfer',
-  rock:'Gestein', ghost:'Geist', dragon:'Drache', dark:'Unlicht',
-  steel:'Stahl', fairy:'Fee',
-};
-const typeChip = t => `<span class="type-chip tc-${t}">${TYPE_DE[t]||t}</span>`;
+// Type chip (uses i18n.js getTypeName)
+const typeChip = type => `<span class="type-chip tc-${type}">${getTypeName(type)}</span>`;
 
 // ─── Liga-Anzeige ─────────────────────────────────────────────────────────────
 function leagueClass(idx) {
   return ['','l1','l2','l3'][idx] || '';
 }
 
-/** Wie viele Beleber-Sterne (1–3) hat man in der aktuellen Liga? */
 function getLeagueStars(lp, leagueIdx) {
   const start    = LEAGUE_STARTS[Math.min(leagueIdx, 3)];
   const lpInLeag = Math.max(0, lp - start);
   return Math.min(3, Math.floor(lpInLeag / 100) + 1);
 }
 
-/** 3 Beleber-Sprites: ausgefüllt = filled, leer = ausgegraut */
 function starsHTML(filled) {
   return Array.from({ length: 3 }, (_, i) =>
     `<img src="${REVIVE_SPRITE}" class="star-img${i < filled ? '' : ' star-empty'}" alt="★" />`
   ).join('');
 }
 
+function getLeagueName(idx) {
+  return t(`league.${Math.min(idx, 3)}`);
+}
+
 function updateLeagueUI(lp, league) {
   const idx    = league?.leagueIdx ?? 0;
-  const name   = LEAGUE_NAMES[idx];
+  const name   = getLeagueName(idx);
   const sprite = LEAGUE_SPRITES[idx];
   const stars  = getLeagueStars(lp, idx);
-  // LP-Fortschritt innerhalb der aktuellen Liga (0–300)
   const lpInLeag = Math.max(0, lp - LEAGUE_STARTS[idx]);
   const pct      = Math.min(100, (lpInLeag / 300) * 100);
 
-  // Topbar: kleines Ball-Icon + Liga-Badge + LP
   const iconSm = document.getElementById('ui-league-icon');
   if (iconSm) iconSm.src = sprite;
   const leagueEl = document.getElementById('ui-league');
@@ -157,11 +142,10 @@ function updateLeagueUI(lp, league) {
   const lpEl = document.getElementById('ui-lp');
   if (lpEl) lpEl.textContent = `${lp} LP`;
 
-  // Ranked Card
   const riEl = document.getElementById('ranked-league-icon');
   if (riEl) riEl.src = sprite;
   const rnEl = document.getElementById('ranked-league-name');
-  if (rnEl) rnEl.textContent = `${name}-Liga`;
+  if (rnEl) rnEl.textContent = `${name}${t('league.suffix')}`;
   const rlEl = document.getElementById('ranked-lp-display');
   if (rlEl) rlEl.textContent = `${lp} LP`;
   const starsEl = document.getElementById('ranked-league-stars');
@@ -184,25 +168,53 @@ function updateUserUI() {
   const xpBar = document.getElementById('ui-xp-bar');
   if (xpBar) xpBar.style.width = `${Math.min(100,(u.xp/(u.xpToNext||100))*100)}%`;
   updateLeagueUI(u.lp || 0, u.league);
-  // Coins
   const coinsEl  = document.getElementById('ui-coins');
   if (coinsEl) coinsEl.textContent = `🪙 ${u.coins || 0}`;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//   PROF. EICH TUTORIAL
-// ══════════════════════════════════════════════════════════════════════════════
-const TUTORIAL_STEPS = [
-  `Hallo! Willkommen in der Welt der POKÉMON!<br>Ich heiße <strong>Prof. Eich</strong>. Lass mich dir <strong>PokéGuess</strong> erklären!`,
-  `Beide Spieler wählen zu Beginn geheim eine <strong>Prämisse</strong> – zum Beispiel <em>„Wasser-Typ"</em>, <em>„Legendäres Pokémon"</em> oder <em>„Nur eine Entwicklung"</em>.`,
-  `Dann schlägst du abwechselnd Pokémon vor. Das Spiel antwortet automatisch:<br>
-   <span class="t-yes">✓ Ja</span> – das Pokémon passt zur Gegner-Prämisse!<br>
-   <span class="t-no">✗ Nein</span> – es passt nicht, der Zug wechselt.`,
-  `Bei Doppeltyp-Prämissen gibt es auch ein <strong style="color:#d97706">~ Teiltreffer</strong> – einer der zwei Typen stimmt, aber nicht beide. Schlau nutzen!`,
-  `<strong>Pro Zug hast du 20 Sekunden!</strong> Bestätigte Pokémon sind wertvolle Hinweise – nutze sie, um die Prämisse deines Gegners zu erraten.`,
-  `Du kannst die Prämisse jederzeit direkt raten – aber <span class="t-no">3 Fehlversuche = Niederlage!</span><br>Im <strong>Ranked-Modus</strong> kämpfst du um LP und steigst durch die Ligen auf. Viel Erfolg, Trainer! 🏆`,
-];
+// ─── Language Toggle ──────────────────────────────────────────────────────────
+function handleLangToggle() {
+  const next = window.LANG === 'de' ? 'en' : 'de';
+  setLanguage(next);
+}
 
+// Wire all lang toggle buttons
+['btn-lang-toggle','btn-lang-toggle-auth','btn-lang-toggle-sel',
+ 'btn-lang-toggle-game','btn-lang-toggle-lb','btn-lang-toggle-friends'].forEach(id => {
+  const btn = document.getElementById(id);
+  if (btn) btn.addEventListener('click', handleLangToggle);
+});
+
+// Re-render dynamic content on language change
+document.addEventListener('langChange', () => {
+  updateUserUI();
+  // Re-render premises if on select screen
+  if (state.premises.length) renderPremises(state.premises, currentCatFilter, document.getElementById('premise-search')?.value || '');
+  // Re-render guess premise list if on game screen
+  if (state.allPremises.length || state.premises.length) renderGuessPremiseList(document.getElementById('guess-premise-search')?.value || '');
+  // Re-render Pokédex
+  renderPokedex();
+  // Update tutorial name
+  const nameEl = document.getElementById('tutorial-namebox');
+  if (nameEl) nameEl.textContent = t('tutorial.name');
+  // Re-render tutorial step if visible
+  const tutModal = document.getElementById('tutorial-modal');
+  if (tutModal && !tutModal.classList.contains('hidden')) renderTutorialStep();
+  // Update "my premise badge" label if set
+  if (state.confirmedPremise) {
+    const badge = document.getElementById('my-premise-badge');
+    if (badge) badge.textContent = tPremise(state.confirmedPremise.id, state.confirmedPremise.label);
+  }
+  // Update turn indicator
+  if (state.gameState) updateGameState(state.gameState);
+});
+
+// Track current category filter for re-render
+let currentCatFilter = 'Alle';
+
+// ══════════════════════════════════════════════════════════════════════════════
+//   PROF. EICH / OAK TUTORIAL
+// ══════════════════════════════════════════════════════════════════════════════
 let tutorialStep = 0;
 
 function showTutorial() {
@@ -212,8 +224,13 @@ function showTutorial() {
 }
 
 function renderTutorialStep() {
-  const total = TUTORIAL_STEPS.length;
-  document.getElementById('tutorial-text').innerHTML = TUTORIAL_STEPS[tutorialStep];
+  const steps = getTutorialSteps();
+  const total = steps.length;
+  document.getElementById('tutorial-text').innerHTML = steps[tutorialStep];
+
+  // Tutorial name
+  const nameEl = document.getElementById('tutorial-namebox');
+  if (nameEl) nameEl.textContent = t('tutorial.name');
 
   // Dots
   const dotsEl = document.getElementById('tutorial-dots');
@@ -221,15 +238,16 @@ function renderTutorialStep() {
     `<div class="tutorial-dot${i === tutorialStep ? ' active' : ''}"></div>`
   ).join('');
 
-  // Button-Text
+  // Button
   const btn = document.getElementById('btn-tutorial-next');
   const isLast = tutorialStep === total - 1;
-  btn.textContent = isLast ? 'Los geht\'s! 🎮' : 'Weiter ▶';
+  btn.textContent = isLast ? t('btn.tutorial.finish') : t('btn.tutorial.next');
   btn.className   = isLast ? 'btn-tutorial-next finish' : 'btn-tutorial-next';
 }
 
 document.getElementById('btn-tutorial-next').addEventListener('click', () => {
-  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+  const steps = getTutorialSteps();
+  if (tutorialStep < steps.length - 1) {
     tutorialStep++;
     renderTutorialStep();
   } else {
@@ -243,7 +261,7 @@ document.getElementById('btn-tutorial-next').addEventListener('click', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 document.querySelectorAll('.tab').forEach(btn =>
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(tb => tb.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
     document.getElementById(`form-${btn.dataset.tab}`).classList.add('active');
@@ -268,7 +286,7 @@ document.getElementById('form-register').addEventListener('submit', async e => {
       method: 'POST',
       body: JSON.stringify({ username: document.getElementById('reg-username').value.trim(), password: document.getElementById('reg-password').value }),
     });
-    onLogin(token, user, true); // true = neu registriert → Tutorial zeigen
+    onLogin(token, user, true);
   } catch (err) { document.getElementById('reg-error').textContent = err.message; }
 });
 
@@ -278,9 +296,8 @@ function onLogin(token, user, isNewUser = false) {
   localStorage.setItem('pg_user', JSON.stringify(user));
   initSocket();
   showHome();
-  // Tutorial nur bei Erstregistrierung und wenn noch nicht gesehen
   if (isNewUser && !localStorage.getItem('pg_tutorial_seen')) {
-    setTimeout(() => showTutorial(), 600); // kurz warten bis Home-Screen geladen
+    setTimeout(() => showTutorial(), 600);
   }
 }
 
@@ -310,14 +327,13 @@ async function showHome() {
     const badge = document.getElementById('friend-badge');
     if (badge) { badge.textContent = reqs; badge.classList.toggle('hidden', reqs === 0); }
   } catch {}
-  // Pokédex laden
   loadPokedex();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 //   POKÉDEX
 // ══════════════════════════════════════════════════════════════════════════════
-let dexData = [];    // aktuell geladene Pokédex-Einträge
+let dexData = [];
 let dexCoins = 0;
 let dexModalEntry = null;
 
@@ -334,19 +350,17 @@ function renderPokedex() {
   const grid = document.getElementById('pokedex-grid');
   const countEl = document.getElementById('dex-count-badge');
   const coinsEl = document.getElementById('dex-coins-display');
-  if (countEl) countEl.textContent = `${dexData.length} gefangen`;
+  if (countEl) countEl.textContent = `${dexData.length} ${t('dex.caught.suffix')}`;
   if (coinsEl) coinsEl.textContent = `🪙 ${dexCoins}`;
-  // Topbar Coins
   const uiCoins = document.getElementById('ui-coins');
   if (uiCoins) uiCoins.textContent = `🪙 ${dexCoins}`;
 
   if (!grid) return;
   if (dexData.length === 0) {
-    grid.innerHTML = '<p class="muted-text dex-empty-msg">Noch keine Pokémon gefangen – spiele eine Runde!</p>';
+    grid.innerHTML = `<p class="muted-text dex-empty-msg">${t('dex.empty')}</p>`;
     return;
   }
 
-  // Sortieren: erst nach ID
   const sorted = [...dexData].sort((a, b) => a.pokemonId - b.pokemonId);
 
   grid.innerHTML = sorted.map(p => {
@@ -384,15 +398,15 @@ function openDexModal(pokemonId) {
   const buyBtn = document.getElementById('btn-buy-shiny');
 
   if (entry.isShiny) {
-    document.getElementById('dex-modal-owned').textContent = '✨ Shiny bereits vorhanden!';
-    buyBtn.textContent = '✨ Bereits gekauft';
+    document.getElementById('dex-modal-owned').textContent = t('dex.shiny.unlocked');
+    buyBtn.textContent = t('btn.already.owned');
     buyBtn.className   = 'btn-shiny-buy already-owned';
     buyBtn.disabled    = true;
   } else {
     const affordable = dexCoins >= price;
     document.getElementById('dex-modal-owned').textContent =
-      `Deine Coins: 🪙 ${dexCoins}  |  Preis: 🪙 ${price}`;
-    buyBtn.textContent = `✨ Shiny kaufen – 🪙 ${price}`;
+      t('dex.owned.info', { coins: dexCoins, price });
+    buyBtn.textContent = `${t('btn.buy.shiny')} – 🪙 ${price}`;
     buyBtn.className   = 'btn-shiny-buy';
     buyBtn.disabled    = !affordable;
   }
@@ -418,10 +432,9 @@ document.getElementById('btn-buy-shiny').addEventListener('click', async () => {
       body: JSON.stringify({ pokemonId: dexModalEntry.pokemonId }),
     });
     dexCoins = coins;
-    // Lokal updaten
     const e = dexData.find(d => d.pokemonId === dexModalEntry.pokemonId);
     if (e) e.isShiny = true;
-    toast(`✨ ${dexModalEntry.pokemonName} Shiny freigeschaltet!`, 'success');
+    toast(t('toast.shiny.bought', { name: dexModalEntry.pokemonName }), 'success');
     document.getElementById('dex-modal').classList.add('hidden');
     renderPokedex();
   } catch (err) { toast(err.message, 'error'); }
@@ -430,7 +443,7 @@ document.getElementById('btn-buy-shiny').addEventListener('click', async () => {
 // Home Tabs
 document.querySelectorAll('.home-tab').forEach(btn =>
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.home-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.home-tab').forEach(tb => tb.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.home-panel').forEach(p => p.classList.remove('active'));
     document.getElementById(`htab-${btn.dataset.htab}`).classList.add('active');
@@ -447,10 +460,10 @@ document.getElementById('room-code').addEventListener('keydown', e => { if (e.ke
 
 function joinPrivate() {
   const code = document.getElementById('room-code').value.trim().toUpperCase();
-  if (!code) return toast('Bitte Raum-Code eingeben', 'error');
+  if (!code) return toast(t('toast.no.code'), 'error');
   state.roomId = code; state.isRanked = false;
   document.getElementById('lobby-status').classList.remove('hidden');
-  document.getElementById('lobby-status-text').textContent = 'Verbinde…';
+  document.getElementById('lobby-status-text').textContent = t('game.wait.lobby');
   socket.emit('lobby:join', { roomId: code, level: state.user?.level || 1, lp: state.user?.lp || 0 });
 }
 
@@ -461,7 +474,6 @@ document.getElementById('btn-ranked').addEventListener('click', () => {
   document.getElementById('btn-ranked').classList.add('hidden');
   socket.emit('ranked:join', { level: state.user?.level || 1, lp: state.user?.lp || 0 });
 
-  // Punkte animieren
   let dots = 0;
   const iv = setInterval(() => {
     dots = (dots + 1) % 4;
@@ -489,35 +501,47 @@ document.getElementById('btn-friends-back').addEventListener('click', showHome);
 // ══════════════════════════════════════════════════════════════════════════════
 async function showSelectScreen(isRanked = false) {
   showScreen('screen-select');
-  document.getElementById('sel-opponent-hint').textContent = 'Dein Gegner wählt auch gerade…';
+  document.getElementById('sel-opponent-hint').textContent = t('select.opp.hint');
   document.getElementById('premise-preview').classList.add('hidden');
   document.getElementById('btn-confirm-premise').disabled = false;
-  document.getElementById('btn-confirm-premise').textContent = 'Diese Prämisse wählen ✓';
+  document.getElementById('btn-confirm-premise').textContent = t('btn.confirm.premise');
   const rb = document.getElementById('sel-ranked-badge');
   if (rb) rb.classList.toggle('hidden', !isRanked);
   state.selectedPremise = null; state.confirmedPremise = null;
+  currentCatFilter = 'Alle';
   try {
     const { premises } = await apiFetch('/api/premises');
     state.premises = premises;
     renderPremises(premises, 'Alle', '');
-  } catch { toast('Prämissen konnten nicht geladen werden', 'error'); }
+  } catch { toast(t('toast.premises.fail'), 'error'); }
 }
 
 function renderPremises(list, filterCat = 'Alle', searchQ = '') {
+  currentCatFilter = filterCat;
   const cats = ['Alle', ...new Set(list.map(p => p.category))];
   const catTabs = document.getElementById('category-tabs');
-  catTabs.innerHTML = cats.map(c => `<button class="cat-tab ${c===filterCat?'active':''}" data-cat="${c}">${c}</button>`).join('');
+  catTabs.innerHTML = cats.map(c =>
+    `<button class="cat-tab ${c===filterCat?'active':''}" data-cat="${c}">${tCat(c)}</button>`
+  ).join('');
   catTabs.querySelectorAll('.cat-tab').forEach(btn =>
-    btn.addEventListener('click', () => renderPremises(list, btn.dataset.cat, document.getElementById('premise-search').value))
+    btn.addEventListener('click', () => {
+      currentCatFilter = btn.dataset.cat;
+      renderPremises(list, btn.dataset.cat, document.getElementById('premise-search').value);
+    })
   );
   let filtered = list;
   if (filterCat !== 'Alle') filtered = filtered.filter(p => p.category === filterCat);
-  if (searchQ) filtered = filtered.filter(p => p.label.toLowerCase().includes(searchQ.toLowerCase()));
+  if (searchQ) {
+    const q = searchQ.toLowerCase();
+    filtered = filtered.filter(p =>
+      tPremise(p.id, p.label).toLowerCase().includes(q) || p.label.toLowerCase().includes(q)
+    );
+  }
   const container = document.getElementById('premise-list');
   container.innerHTML = filtered.map(p => `
     <div class="premise-item" data-id="${p.id}">
-      <span class="premise-name">${p.label}</span>
-      <span class="premise-count">${p.count} Pokémon</span>
+      <span class="premise-name">${tPremise(p.id, p.label)}</span>
+      <span class="premise-count">${p.count} ${t('premise.count.suffix')}</span>
     </div>`).join('');
   container.querySelectorAll('.premise-item').forEach(item =>
     item.addEventListener('click', () => selectPremise(item.dataset.id))
@@ -525,16 +549,15 @@ function renderPremises(list, filterCat = 'Alle', searchQ = '') {
 }
 
 document.getElementById('premise-search').addEventListener('input', e => {
-  const active = document.querySelector('.cat-tab.active');
-  renderPremises(state.premises, active?.dataset.cat || 'Alle', e.target.value);
+  renderPremises(state.premises, currentCatFilter, e.target.value);
 });
 
 async function selectPremise(id) {
   const premise = state.premises.find(p => p.id === id);
   if (!premise) return;
   state.selectedPremise = premise;
-  document.getElementById('preview-title').textContent = premise.label;
-  document.getElementById('preview-count').textContent = `${premise.count} Pokémon`;
+  document.getElementById('preview-title').textContent = tPremise(premise.id, premise.label);
+  document.getElementById('preview-count').textContent = `${premise.count} ${t('premise.count.suffix')}`;
   document.getElementById('premise-preview').classList.remove('hidden');
   document.getElementById('preview-pokemon-grid').innerHTML = '<div class="spinner" style="margin:auto"></div>';
   try {
@@ -548,7 +571,7 @@ document.getElementById('btn-confirm-premise').addEventListener('click', () => {
   if (!state.selectedPremise) return;
   socket.emit('game:choosePremise', { premiseId: state.selectedPremise.id });
   document.getElementById('btn-confirm-premise').disabled = true;
-  document.getElementById('btn-confirm-premise').textContent = 'Gewählt! Warte auf Gegner…';
+  document.getElementById('btn-confirm-premise').textContent = t('btn.chosen.wait');
   state.confirmedPremise = state.selectedPremise;
 });
 
@@ -567,12 +590,13 @@ async function showGameScreen() {
   document.getElementById('confirmed-pokemon-list').innerHTML = '';
   document.getElementById('confirmed-count').textContent = '0';
   document.getElementById('opp-suggest-count').textContent = '0';
-  if (state.confirmedPremise)
-    document.getElementById('my-premise-badge').textContent = state.confirmedPremise.label;
+  if (state.confirmedPremise) {
+    document.getElementById('my-premise-badge').textContent =
+      tPremise(state.confirmedPremise.id, state.confirmedPremise.label);
+  }
   lastTurnOwner = null;
   clearTurnTimer();
   initPokemonSearch();
-  // Alle Prämissen für Gegner-Raten laden (inkl. Tier 2 die man selbst noch nicht hat)
   try {
     const { premises } = await apiFetch('/api/premises?all=true');
     state.allPremises = premises;
@@ -585,22 +609,22 @@ function updateGameState(gs) {
   const isMyTurn = gs.currentTurn === state.user?.id;
   const turnEl = document.getElementById('turn-indicator');
   if (gs.phase === 'finished') {
-    turnEl.textContent = 'Spiel beendet'; turnEl.className = 'turn-indicator';
+    turnEl.textContent = t('game.finished'); turnEl.className = 'turn-indicator';
     clearTurnTimer(); lastTurnOwner = null;
   } else if (isMyTurn) {
-    turnEl.textContent = '🟢 Du bist dran!'; turnEl.className = 'turn-indicator my-turn';
-    // Timer nur starten, wenn sich der Zug wechselt
+    turnEl.textContent = t('game.my.turn'); turnEl.className = 'turn-indicator my-turn';
     if (lastTurnOwner !== state.user?.id) startTurnTimer();
     lastTurnOwner = state.user?.id;
   } else {
-    turnEl.textContent = `⏳ ${gs.opponentName||'Gegner'} denkt…`; turnEl.className = 'turn-indicator opp-turn';
+    turnEl.textContent = t('game.opp.thinking', { name: gs.opponentName || 'Opponent' });
+    turnEl.className = 'turn-indicator opp-turn';
     clearTurnTimer(); lastTurnOwner = gs.currentTurn;
   }
   document.getElementById('my-mistakes').textContent  = gs.myMistakes;
   document.getElementById('opp-mistakes').textContent = gs.opponentMistakes;
   document.getElementById('input-area').classList.toggle('disabled', !isMyTurn || gs.phase !== 'guessing');
 
-  // Bestätigte Pokémon (rechts)
+  // Bestätigte Pokémon
   const confList = document.getElementById('confirmed-pokemon-list');
   const conf = gs.confirmedForMe || [];
   confList.innerHTML = conf.map(p => `
@@ -611,7 +635,7 @@ function updateGameState(gs) {
     </div>`).join('');
   document.getElementById('confirmed-count').textContent = conf.length;
 
-  // Gegner-Vorschläge (links)
+  // Gegner-Vorschläge
   const oppList = document.getElementById('opp-suggest-list');
   const opp = gs.oppSuggestHistory || [];
   oppList.innerHTML = opp.map(e => `
@@ -629,10 +653,10 @@ function renderHistory(history) {
   const list = document.getElementById('history-list');
   list.innerHTML = history.map(entry => {
     if (entry.pokemonId) {
-      const r = entry.result; // 'yes' | 'partial' | 'no'
+      const r = entry.result;
       const icon = r === 'yes' ? '✓' : (r === 'partial' ? '~' : '✗');
       const partialHint = r === 'partial'
-        ? '<span class="partial-hint">ein Typ ✓</span>' : '';
+        ? `<span class="partial-hint">${t('history.partial.hint')}</span>` : '';
       return `<div class="history-entry ${r}">
         <span class="history-result">${icon}</span>
         <img src="${entry.pokemonSprite}" alt="${entry.pokemonName}"/>
@@ -641,13 +665,13 @@ function renderHistory(history) {
         ${partialHint}
       </div>`;
     }
+    const premLabel = tPremise(entry.premiseGuess, entry.premiseLabel);
     return `<div class="history-entry ${entry.result==='correct'?'yes':'wrong-guess'}">
-      <span>💡 <strong>${entry.premiseLabel}</strong></span>
+      <span>💡 <strong>${premLabel}</strong></span>
       <span class="history-result">${entry.result==='correct'?'✓':'✗'}</span>
     </div>`;
   }).join('');
 
-  // Immer zum neuesten Eintrag scrollen
   const last = list.lastElementChild;
   if (last) requestAnimationFrame(() => last.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
@@ -685,20 +709,24 @@ function initPokemonSearch() {
 
 document.getElementById('btn-suggest').addEventListener('click', () => {
   const name = document.getElementById('pokemon-search-input').value.trim();
-  if (!name) return toast('Bitte ein Pokémon eingeben', 'error');
+  if (!name) return toast(t('toast.pokemon.empty'), 'error');
   socket.emit('game:suggestPokemon', { pokemonName: name });
   document.getElementById('pokemon-search-input').value = '';
 });
 
-// Prämissen-Raten (nutzt allPremises – alle Prämissen unabhängig von Level)
+// Prämissen-Raten
 function renderGuessPremiseList(q) {
   const list = document.getElementById('guess-premise-list');
   const source = state.allPremises.length ? state.allPremises : state.premises;
-  const filtered = source.filter(p => !q || p.label.toLowerCase().includes(q.toLowerCase()));
+  const filtered = source.filter(p => {
+    if (!q) return true;
+    const label = tPremise(p.id, p.label).toLowerCase();
+    return label.includes(q.toLowerCase()) || p.label.toLowerCase().includes(q.toLowerCase());
+  });
   list.innerHTML = filtered.map(p => `
     <div class="premise-item" data-id="${p.id}">
-      <span class="premise-name">${p.label}</span>
-      <span class="premise-count">${p.count} Pokémon</span>
+      <span class="premise-name">${tPremise(p.id, p.label)}</span>
+      <span class="premise-count">${p.count} ${t('premise.count.suffix')}</span>
     </div>`).join('');
   list.querySelectorAll('.premise-item').forEach(item =>
     item.addEventListener('click', () => {
@@ -711,7 +739,7 @@ function renderGuessPremiseList(q) {
 document.getElementById('guess-premise-search').addEventListener('input', e => renderGuessPremiseList(e.target.value));
 document.getElementById('btn-guess-premise').addEventListener('click', () => {
   if (!state.guessPremise) return;
-  if (!confirm('Sicher? Falsches Raten kostet einen Fehlversuch!')) return;
+  if (!confirm(t('toast.guess.confirm'))) return;
   socket.emit('game:guessPremise', { premiseId: state.guessPremise });
   state.guessPremise = null;
   document.getElementById('btn-guess-premise').disabled = true;
@@ -721,7 +749,7 @@ document.getElementById('btn-guess-premise').addEventListener('click', () => {
 // Input Tabs
 document.querySelectorAll('.input-tab').forEach(tab =>
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.input-tab').forEach(tb => tb.classList.remove('active'));
     document.querySelectorAll('.input-panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById(`panel-${tab.dataset.mode}`).classList.add('active');
@@ -731,24 +759,33 @@ document.querySelectorAll('.input-tab').forEach(tab =>
 // ══════════════════════════════════════════════════════════════════════════════
 //   RESULT
 // ══════════════════════════════════════════════════════════════════════════════
-let _pendingRewards = null; // wird von user:statsUpdated befüllt
-
 function showResult(data) {
   showScreen('screen-result');
   clearTurnTimer();
   const isWinner = data.winner === state.user?.id;
   document.getElementById('result-icon').textContent    = isWinner ? '🏆' : '💀';
-  document.getElementById('result-title').textContent   = isWinner ? 'Sieg!' : 'Niederlage';
-  document.getElementById('result-subtitle').textContent = isWinner ? 'Du hast gewonnen!' : `${data.winnerName} hat gewonnen.`;
-  const reason = data.reason === 'correct_guess' ? 'Die Prämisse wurde korrekt erraten.'
-               : data.reason === 'surrender'     ? (isWinner ? `${data.loserName} hat aufgegeben.` : 'Du hast aufgegeben.')
-               : `${data.loserName} hatte 3 Fehlversuche.`;
+  document.getElementById('result-title').textContent   = isWinner ? t('result.win') : t('result.loss');
+  document.getElementById('result-subtitle').textContent = isWinner ? t('result.win.sub') : `${data.winnerName} hat gewonnen.`;
+
+  let reason;
+  if (data.reason === 'correct_guess') {
+    reason = t('result.reason.guess');
+  } else if (data.reason === 'surrender') {
+    reason = isWinner
+      ? t('result.reason.surrender.win', { name: data.loserName })
+      : t('result.reason.surrender.loss');
+  } else {
+    reason = t('result.reason.mistakes', { name: data.loserName });
+  }
+
+  const oppLabel  = data.opponentPremise ? tPremise(data.opponentPremise.id, data.opponentPremise.label) : '';
+  const myLabel   = data.myPremise       ? tPremise(data.myPremise.id, data.myPremise.label)             : '';
+
   document.getElementById('result-details').innerHTML = `
     <div>${reason}</div>
-    ${data.opponentPremise ? `<div style="margin-top:8px">Gegner-Prämisse: <strong>${data.opponentPremise.label}</strong></div>` : ''}
-    ${data.myPremise      ? `<div>Deine Prämisse: <strong>${data.myPremise.label}</strong></div>` : ''}
+    ${oppLabel ? `<div style="margin-top:8px">${t('result.opp.premise')} <strong>${oppLabel}</strong></div>` : ''}
+    ${myLabel  ? `<div>${t('result.my.premise')} <strong>${myLabel}</strong></div>`                          : ''}
   `;
-  // Rewards werden von user:statsUpdated befüllt (kommt kurz nach game:over)
   document.getElementById('result-rewards').innerHTML = '';
 }
 
@@ -767,7 +804,7 @@ function renderResultRewards(stats) {
 }
 
 document.getElementById('btn-surrender').addEventListener('click', () => {
-  if (!confirm('Wirklich aufgeben? Du verlierst die Runde!')) return;
+  if (!confirm(t('toast.surrender.confirm'))) return;
   clearTurnTimer();
   socket.emit('game:surrender');
 });
@@ -792,18 +829,18 @@ async function showLeaderboard(scope = 'world') {
         <td>Lv.${u.level}</td>
         <td><strong>${u.lp}</strong> LP</td>
         <td class="lb-league-cell">
-          <img src="${LEAGUE_SPRITES[u.leagueIdx] || LEAGUE_SPRITES[0]}" class="lb-ball-icon" alt="${u.leagueName}" title="${u.leagueName}" />
-          <span class="league-badge ${leagueClass(u.leagueIdx)}">${u.leagueName}</span>
+          <img src="${LEAGUE_SPRITES[u.leagueIdx] || LEAGUE_SPRITES[0]}" class="lb-ball-icon" alt="${getLeagueName(u.leagueIdx)}" title="${getLeagueName(u.leagueIdx)}" />
+          <span class="league-badge ${leagueClass(u.leagueIdx)}">${getLeagueName(u.leagueIdx)}</span>
         </td>
         <td>${u.wins}</td>
         <td>${u.rankedWins}</td>
-      </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:#555;padding:20px">Noch keine Einträge</td></tr>';
-  } catch { toast('Fehler beim Laden', 'error'); }
+      </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:#555;padding:20px">${t('lb.empty')}</td></tr>`;
+  } catch { toast(t('toast.load.fail'), 'error'); }
 }
 
 document.querySelectorAll('.lb-tab').forEach(tab =>
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.lb-tab').forEach(tb => tb.classList.remove('active'));
     tab.classList.add('active');
     showLeaderboard(tab.dataset.scope);
   })
@@ -816,36 +853,37 @@ async function showFriends() {
   showScreen('screen-friends');
   try {
     const { friends, requests } = await apiFetch('/api/friends');
-    // Anfragen
     const reqList = document.getElementById('friend-requests-list');
     reqList.innerHTML = requests.length
       ? requests.map(r => `
           <div class="friend-request-item">
             <span class="fi-name">${r}</span>
-            <button class="btn-primary btn-sm" onclick="acceptFriend('${r}')">✓</button>
-            <button class="btn-sm" onclick="declineFriend('${r}')">✗</button>
+            <button class="btn-primary btn-sm" onclick="acceptFriend('${r}')">${t('btn.accept')}</button>
+            <button class="btn-sm" onclick="declineFriend('${r}')">${t('btn.decline')}</button>
           </div>`).join('')
-      : '<p class="muted-text">Keine Anfragen</p>';
-    // Liste
+      : `<p class="muted-text">${t('friends.no.requests')}</p>`;
     const friendList = document.getElementById('friends-list');
     friendList.innerHTML = friends.length
       ? friends.map(f => `
           <div class="friend-item">
             <span class="fi-name">${f}</span>
-            <button class="btn-sm" onclick="removeFriend('${f}')">Entfernen</button>
+            <button class="btn-sm" onclick="removeFriend('${f}')">${t('btn.remove')}</button>
           </div>`).join('')
-      : '<p class="muted-text">Noch keine Freunde</p>';
+      : `<p class="muted-text">${t('friends.no.friends')}</p>`;
   } catch {}
 }
 
 window.acceptFriend = async (username) => {
-  try { await apiFetch('/api/friends/accept', { method:'POST', body: JSON.stringify({username}) }); toast('Freund hinzugefügt!','success'); showFriends(); } catch (e) { toast(e.message,'error'); }
+  try {
+    await apiFetch('/api/friends/accept', { method:'POST', body: JSON.stringify({username}) });
+    toast(t('toast.friend.added'), 'success'); showFriends();
+  } catch (e) { toast(e.message, 'error'); }
 };
 window.declineFriend = async (username) => {
   try { await apiFetch('/api/friends/decline', { method:'POST', body: JSON.stringify({username}) }); showFriends(); } catch {}
 };
 window.removeFriend = async (username) => {
-  if (!confirm(`${username} entfernen?`)) return;
+  if (!confirm(t('toast.remove.confirm', { name: username }))) return;
   try { await apiFetch(`/api/friends/${username}`, { method:'DELETE' }); showFriends(); } catch {}
 };
 
@@ -861,14 +899,17 @@ document.getElementById('btn-friend-search').addEventListener('click', async () 
           <div class="friend-item">
             <span class="fi-name">${u.username}</span>
             <span class="fi-info">Lv.${u.level} · ${u.lp} LP</span>
-            <button class="btn-sm" onclick="sendFriendRequest('${u.username}')">+ Anfrage</button>
+            <button class="btn-sm" onclick="sendFriendRequest('${u.username}')">${t('btn.send.request')}</button>
           </div>`).join('')
-      : '<p class="muted-text">Niemanden gefunden</p>';
+      : `<p class="muted-text">${t('friends.no.results')}</p>`;
   } catch {}
 });
 
 window.sendFriendRequest = async (username) => {
-  try { await apiFetch('/api/friends/request', { method:'POST', body: JSON.stringify({username}) }); toast(`Anfrage an ${username} gesendet!`,'success'); } catch (e) { toast(e.message,'error'); }
+  try {
+    await apiFetch('/api/friends/request', { method:'POST', body: JSON.stringify({username}) });
+    toast(t('toast.friend.sent', { name: username }), 'success');
+  } catch (e) { toast(e.message, 'error'); }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -878,19 +919,18 @@ function initSocket() {
   if (socket) socket.disconnect();
   socket = io({ auth: { token: state.token } });
 
-  socket.on('connect_error', err => toast(`Verbindungsfehler: ${err.message}`, 'error'));
+  socket.on('connect_error', err => toast(t('game.connect.error', { msg: err.message }), 'error'));
 
-  // Lobby
   socket.on('lobby:joined', ({ playerCount }) => {
-    if (playerCount === 1) document.getElementById('lobby-status-text').textContent = 'Warte auf Mitspieler… Teile den Raum-Code!';
+    if (playerCount === 1)
+      document.getElementById('lobby-status-text').textContent = t('game.wait.player');
   });
   socket.on('lobby:waiting', ({ message }) => {
     document.getElementById('lobby-status-text').textContent = message;
   });
 
-  // Ranked
   socket.on('ranked:queued', ({ position }) => {
-    toast(`In der Warteschlange (Position ${position})…`, 'info');
+    toast(t('game.queue.pos', { pos: position }), 'info');
   });
   socket.on('ranked:left', () => {
     clearInterval(socket._queueInterval);
@@ -898,13 +938,11 @@ function initSocket() {
     document.getElementById('btn-ranked').classList.remove('hidden');
   });
   socket.on('ranked:rematch', () => {
-    // Nach Bot-Match Rematch → wieder in Queue
     document.getElementById('ranked-queue-status').classList.remove('hidden');
     document.getElementById('btn-ranked').classList.add('hidden');
     socket.emit('ranked:join', { level: state.user?.level||1, lp: state.user?.lp||0 });
   });
 
-  // Prämisse wählen
   socket.on('game:selectPremise', ({ message, isRanked }) => {
     clearInterval(socket._queueInterval);
     document.getElementById('ranked-queue-status')?.classList.add('hidden');
@@ -913,48 +951,43 @@ function initSocket() {
     toast(message, 'success');
     showSelectScreen(!!isRanked);
   });
-  socket.on('game:premiseConfirmed', ({ label }) => {
-    toast(`Prämisse „${label}" gewählt!`, 'success');
-    document.getElementById('sel-opponent-hint').textContent = 'Deine Prämisse ist gesetzt. Warte auf Gegner…';
+  socket.on('game:premiseConfirmed', ({ label, premiseId }) => {
+    toast(t('toast.premise.chosen', { label: tPremise(premiseId, label) }), 'success');
+    document.getElementById('sel-opponent-hint').textContent =
+      window.LANG === 'en' ? 'Your premise is set. Waiting for opponent…' : 'Deine Prämisse ist gesetzt. Warte auf Gegner…';
   });
   socket.on('game:opponentChosePremise', ({ username }) => {
-    document.getElementById('sel-opponent-hint').textContent = `${username} hat gewählt. Du bist noch dran!`;
+    document.getElementById('sel-opponent-hint').textContent = t('game.opp.chosen', { name: username });
   });
 
-  // Spiel
   socket.on('game:started', ({ currentTurnName }) => {
-    toast(`Spiel gestartet! ${currentTurnName} beginnt.`, 'success');
+    toast(t('game.started', { name: currentTurnName }), 'success');
     showGameScreen();
   });
   socket.on('game:state', gs => updateGameState(gs));
   socket.on('game:pokemonResult', ({ suggestedBy, pokemon, matches, isPartial }) => {
     if (suggestedBy !== state.user?.id) {
-      const label = matches ? '✓ Ja!' : (isPartial ? '~ Ein Typ passt' : '✗ Nein');
+      const label = matches ? t('pokemon.result.yes') : (isPartial ? t('pokemon.result.partial') : t('pokemon.result.no'));
       toast(`${pokemon.name} → ${label}`, 'info', 2000);
     }
   });
-  socket.on('game:wrongGuess', ({ premiseLabel, mistakesLeft }) => {
-    toast(`❌ „${premiseLabel}" war falsch! Noch ${mistakesLeft} Versuche.`, 'error');
+  socket.on('game:wrongGuess', ({ premiseLabel, premiseId, mistakesLeft }) => {
+    toast(t('game.wrong.guess', { label: tPremise(premiseId, premiseLabel), n: mistakesLeft }), 'error');
   });
 
-  // Spielende
   socket.on('game:over', data => showResult(data));
   socket.on('user:statsUpdated', stats => {
     state.user = { ...state.user, ...stats };
     if (stats.coins !== undefined) state.user.coins = stats.coins;
     localStorage.setItem('pg_user', JSON.stringify(state.user));
-    // Reward-Chips im Result-Screen
     renderResultRewards(stats);
-    // Coins in Topbar
     const coinsEl = document.getElementById('ui-coins');
     if (coinsEl) coinsEl.textContent = `🪙 ${stats.coins ?? state.user.coins ?? 0}`;
-    // Pokédex live updaten wenn neue Einträge
-    if (stats.newDexEntries?.length) {
-      loadPokedex();
-    }
+    if (stats.newDexEntries?.length) loadPokedex();
   });
 
-  socket.on('game:opponentDisconnected', ({ username }) => toast(`${username} hat die Verbindung getrennt.`, 'error'));
+  socket.on('game:opponentDisconnected', ({ username }) =>
+    toast(t('game.disconnected', { name: username }), 'error'));
   socket.on('error', ({ message }) => toast(message, 'error'));
 }
 
