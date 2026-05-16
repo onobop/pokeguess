@@ -505,24 +505,17 @@ button:active { transform: scale(.97); }
 }
 .game-link-btn:hover { transform: translateY(-3px) scale(1.02); filter: brightness(1.1); }
 
-/* PokéType – rotes Feld, gelber Text mit blauem Outline */
+/* PokéType – echtes Logo-Bild */
 .poketype-btn {
   background: #cc0000;
-  padding: 10px 24px;
+  padding: 0;
 }
-.poketype-logo-text {
-  font-size: 2.6rem;
-  font-weight: 900;
-  font-style: italic;
-  color: #ffcb05;
-  -webkit-text-stroke: 3px #2563eb;
-  text-shadow:
-    3px 3px 0 #2563eb,
-   -1px -1px 0 #2563eb,
-    1px -1px 0 #2563eb,
-   -1px  1px 0 #2563eb;
-  letter-spacing: -1px;
-  line-height: 1;
+.game-logo-img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
 }
 
 /* CloneLab – schwarz, rote R's, weißer Titel */
