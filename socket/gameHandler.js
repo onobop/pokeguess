@@ -28,6 +28,16 @@ const LP = {
   LOSS_VS_BOT:    -8,
 };
 
+// ─── Coin-Belohnungen ─────────────────────────────────────────────────────────
+const COINS = {
+  WIN_RANKED_PLAYER:  40,
+  LOSS_RANKED_PLAYER: 15,
+  WIN_RANKED_BOT:     25,
+  LOSS_RANKED_BOT:     8,
+  WIN_PRIVATE:        20,
+  LOSS_PRIVATE:        5,
+};
+
 // ─── Room erstellen ───────────────────────────────────────────────────────────
 function createRoom(roomId, isRanked = false) {
   return {
@@ -147,6 +157,8 @@ function performSuggestPokemon(io, room, userId, pokemon) {
     room.confirmedPokemon[userId].push({
       id: pokemon.id, name: pokemon.nameDE,
       sprite: pokemon.sprite, types: pokemon.types,
+      isLegendary: pokemon.isLegendary || false,
+      isMythical:  pokemon.isMythical  || false,
     });
   }
 
@@ -344,7 +356,7 @@ function injectBot(io, entry) {
   botChoosePremise(io, room, botEntry);
 }
 
-// ─── XP/LP nach Spielende ────────────────────────────────────────────────────
+// ─── XP/LP/Coins/Pokédex nach Spielende ─────────────────────────────────────
 async function handleGameEnd(io, room, winnerId, loserId) {
   try {
     const User = require('../models/User');
@@ -354,25 +366,64 @@ async function handleGameEnd(io, room, winnerId, loserId) {
     const lpWin  = room.isRanked ? (winnerIsBot ? 0 : (loserIsBot ? LP.WIN_VS_BOT  : LP.WIN_VS_PLAYER))  : 0;
     const lpLoss = room.isRanked ? (loserIsBot  ? 0 : (winnerIsBot ? LP.LOSS_VS_BOT : LP.LOSS_VS_PLAYER)) : 0;
 
+    // Coin-Belohnungen bestimmen
+    function calcCoins(isWinner, oppIsBot) {
+      if (room.isRanked) {
+        return isWinner
+          ? (oppIsBot ? COINS.WIN_RANKED_BOT  : COINS.WIN_RANKED_PLAYER)
+          : (oppIsBot ? COINS.LOSS_RANKED_BOT : COINS.LOSS_RANKED_PLAYER);
+      }
+      return isWinner ? COINS.WIN_PRIVATE : COINS.LOSS_PRIVATE;
+    }
+
     const updates = [];
-    if (!winnerIsBot) updates.push({ id: winnerId, xp: 50, lp: lpWin, win: true, ranked: room.isRanked });
-    if (!loserIsBot)  updates.push({ id: loserId,  xp: 10, lp: lpLoss, win: false, ranked: room.isRanked });
+    if (!winnerIsBot) updates.push({ id: winnerId, xp: 50, lp: lpWin,  win: true,  ranked: room.isRanked, oppIsBot: loserIsBot  });
+    if (!loserIsBot)  updates.push({ id: loserId,  xp: 10, lp: lpLoss, win: false, ranked: room.isRanked, oppIsBot: winnerIsBot });
 
     for (const u of updates) {
       const user = await User.findById(u.id);
       if (!user) continue;
+
+      // XP + Level
       user.addXp(u.xp);
+
+      // LP (Ranked)
       if (room.isRanked) user.addLp(u.lp);
+
+      // Statistiken
       user.stats.gamesPlayed += 1;
       if (u.win) { user.stats.wins += 1; if (u.ranked) user.stats.rankedWins += 1; }
       else        { user.stats.losses += 1; if (u.ranked) user.stats.rankedLosses += 1; }
+
+      // Coins
+      const coinsEarned = calcCoins(u.win, u.oppIsBot);
+      user.addCoins(coinsEarned);
+
+      // Pokédex: bestätigte Pokémon (eigene, die auf Gegner-Prämisse gepasst haben)
+      const confirmed = room.confirmedPokemon[u.id] || [];
+      const newDexEntries = [];
+      for (const p of confirmed) {
+        const added = user.addToPokedex({
+          pokemonId:   p.id,
+          pokemonName: p.name,
+          sprite:      p.sprite,
+          types:       p.types,
+          isLegendary: p.isLegendary || false,
+          isMythical:  p.isMythical  || false,
+        });
+        if (added) newDexEntries.push(p.id);
+      }
+
       await user.save();
 
       const sock = io.sockets.sockets.get(userSockets.get(u.id));
       if (sock) sock.emit('user:statsUpdated', {
         level: user.level, xp: user.xp, xpToNext: user.xpToNextLevel(),
         lp: user.lp, league: user.league, stats: user.stats,
+        coins: user.coins, coinsEarned,
         lpChange: u.lp,
+        newDexEntries,
+        dexCount: user.pokedex.length,
       });
     }
   } catch (e) { console.error('handleGameEnd Fehler:', e); }

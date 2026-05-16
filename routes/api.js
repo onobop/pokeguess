@@ -53,4 +53,34 @@ router.get('/pokemon/search', auth, (req, res) => {
   res.json({ results });
 });
 
+// ─── Pokédex & Coins ──────────────────────────────────────────────────────────
+
+// GET /api/pokedex  – Pokédex des eigenen Accounts
+router.get('/pokedex', auth, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id).select('pokedex coins');
+    res.json({
+      coins:   user.coins || 0,
+      pokedex: user.pokedex || [],
+    });
+  } catch { res.status(500).json({ error: 'Serverfehler' }); }
+});
+
+// POST /api/pokedex/shiny  – Shiny-Version kaufen
+router.post('/pokedex/shiny', auth, async (req, res) => {
+  try {
+    const { pokemonId } = req.body;
+    if (!pokemonId) return res.status(400).json({ error: 'pokemonId fehlt' });
+
+    const User = require('../models/User');
+    const user = await User.findById(req.user.id);
+    const result = user.buyShiny(Number(pokemonId));
+    if (!result.ok) return res.status(400).json({ error: result.reason });
+
+    await user.save();
+    res.json({ ok: true, coins: user.coins, price: result.price });
+  } catch { res.status(500).json({ error: 'Serverfehler' }); }
+});
+
 module.exports = router;

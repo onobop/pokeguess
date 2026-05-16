@@ -43,6 +43,7 @@
       <img class="league-icon-sm" id="ui-league-icon" src="" alt="" />
       <span class="league-badge" id="ui-league">Pokéball</span>
       <span class="lp-badge" id="ui-lp">0 LP</span>
+      <span class="coins-badge" id="ui-coins">🪙 0</span>
       <button class="btn-sm" id="btn-logout">Logout</button>
     </div>
   </header>
@@ -109,11 +110,66 @@
       </div>
     </div>
 
+    <!-- ════ POKÉDEX ════ -->
+    <div class="pokedex-card">
+      <div class="pokedex-header">
+        <div class="pokedex-title-row">
+          <span class="pokedex-icon">🔴</span>
+          <h3>Mein Pokédex</h3>
+          <span class="dex-count-badge" id="dex-count-badge">0 gefangen</span>
+        </div>
+        <div class="coins-info">
+          <span class="coins-big" id="dex-coins-display">🪙 0</span>
+          <span class="coins-hint">Coins</span>
+        </div>
+      </div>
+      <p class="dex-hint">Pokémon, die du in Spielen korrekt als zur Gegner-Prämisse passend erkannt hast.</p>
+      <div class="pokedex-grid" id="pokedex-grid">
+        <p class="muted-text dex-empty-msg">Noch keine Pokémon gefangen – spiele eine Runde!</p>
+      </div>
+    </div>
+
+    <!-- ════ ANDERE SPIELE ════ -->
+    <div class="other-games-section">
+      <p class="section-label">WEITERE SPIELE VON PIXELPOOPER</p>
+      <div class="other-games-row">
+        <a href="https://poketype.pixelpooper.com/" target="_blank" class="game-link-btn poketype-btn">
+          <span class="gl-logo"><span class="gl-poke">Poké</span><span class="gl-type">Type</span></span>
+          <span class="gl-sub">Erraten per Typ</span>
+        </a>
+        <a href="https://clonelab.pixelpooper.com/" target="_blank" class="game-link-btn clonelab-btn">
+          <span class="gl-logo"><span class="gl-clone">Clone</span><span class="gl-lab">Lab</span></span>
+          <span class="gl-sub">Gen-Experiment</span>
+        </a>
+      </div>
+    </div>
+
     <div class="home-legal">
       Pokémon and all related names are trademarks of Nintendo, Game Freak, and The Pokémon Company.
       Not affiliated with ©Nintendo or ©Pokémon Company. For entertainment purposes only.
     </div>
   </main>
+</div>
+
+<!-- ════════════════════════ POKÉDEX SHINY MODAL ════════════════════════ -->
+<div id="dex-modal" class="dex-modal hidden">
+  <div class="dex-modal-box">
+    <button class="dex-modal-close" id="btn-dex-close">✕</button>
+    <div class="dex-modal-sprites">
+      <div class="dex-sprite-wrap">
+        <img id="dex-modal-normal" src="" alt="" class="dex-sprite-big"/>
+        <span class="dex-sprite-label">Normal</span>
+      </div>
+      <div class="dex-sprite-wrap">
+        <img id="dex-modal-shiny" src="" alt="" class="dex-sprite-big dex-shiny-preview"/>
+        <span class="dex-sprite-label shiny-label">✨ Shiny</span>
+      </div>
+    </div>
+    <h3 id="dex-modal-name">Pikachu</h3>
+    <div class="dex-modal-types" id="dex-modal-types"></div>
+    <div class="dex-modal-owned" id="dex-modal-owned"></div>
+    <button class="btn-shiny-buy" id="btn-buy-shiny" disabled>✨ Shiny kaufen</button>
+  </div>
 </div>
 
 <!-- ════════════════════════ PREMISE SELECT ════════════════════════ -->
@@ -158,13 +214,11 @@
     </div>
     <button class="btn-surrender" id="btn-surrender" title="Runde aufgeben">🏳 Aufgeben</button>
   </header>
-  <!-- Timer-Leiste -->
   <div class="turn-timer-bar">
     <div class="turn-timer-fill" id="timer-fill"></div>
   </div>
 
   <div class="game-layout">
-    <!-- Links: Meine Prämisse + was Gegner bei mir richtig geraten hat -->
     <aside class="panel panel-left">
       <div class="panel-section">
         <h4>Meine Prämisse</h4>
@@ -176,14 +230,12 @@
       </div>
     </aside>
 
-    <!-- Mitte -->
     <main class="game-center">
       <div class="input-area" id="input-area">
         <div class="input-tabs">
           <button class="input-tab active" data-mode="pokemon">Pokémon vorschlagen</button>
           <button class="input-tab" data-mode="premise">Prämisse raten</button>
         </div>
-        <!-- Pokémon -->
         <div class="input-panel active" id="panel-pokemon">
           <div class="search-wrap">
             <input type="text" id="pokemon-search-input" placeholder="Pokémon-Name…" autocomplete="off"/>
@@ -191,7 +243,6 @@
           </div>
           <button class="btn-primary" id="btn-suggest">Vorschlagen →</button>
         </div>
-        <!-- Prämisse raten -->
         <div class="input-panel" id="panel-premise">
           <p class="warn-text">⚠️ Falsch raten = Fehlversuch! (max. 3)</p>
           <div class="premise-search-bar">
@@ -201,15 +252,12 @@
           <button class="btn-danger" id="btn-guess-premise" disabled>Prämisse raten!</button>
         </div>
       </div>
-
-      <!-- Verlauf -->
       <div class="guess-history">
         <h4>Meine Vorschläge <span class="count-badge" id="confirmed-count">0</span> ✓</h4>
         <div id="history-list"></div>
       </div>
     </main>
 
-    <!-- Rechts: Bestätigte Pokémon (die der Gegner richtig getroffen hat) -->
     <aside class="panel panel-right">
       <h4>Bestätigte Pokémon</h4>
       <p class="hint-text" style="font-size:.75rem">Pokémon die zum Gegner passen</p>
@@ -225,8 +273,7 @@
     <h2 id="result-title">Ergebnis</h2>
     <p id="result-subtitle"></p>
     <div class="result-details" id="result-details"></div>
-    <div class="lp-change" id="lp-change"></div>
-    <div class="xp-earned" id="xp-earned"></div>
+    <div class="result-rewards" id="result-rewards"></div>
     <div class="result-buttons">
       <button class="btn-primary"   id="btn-rematch">Rematch!</button>
       <button class="btn-secondary" id="btn-back-lobby">Hauptmenü</button>
@@ -277,5 +324,16 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/app.js"></script>
+
+<!-- Ko-Fi Widget -->
+<script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
+<script>
+  kofiWidgetOverlay.draw('pixelpooper', {
+    'type': 'floating-chat',
+    'floating-chat.donateButton.text': 'Tip Us',
+    'floating-chat.donateButton.background-color': '#d9534f',
+    'floating-chat.donateButton.text-color': '#fff'
+  });
+</script>
 </body>
 </html>

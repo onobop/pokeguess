@@ -384,7 +384,148 @@ button:active { transform: scale(.97); }
   background: var(--bg2); border: 1px solid var(--accent2); border-radius: var(--radius); margin-bottom: 6px;
 }
 
-/* LP Change */
+/* Coins Badge (Topbar) */
+.coins-badge {
+  font-size: .82rem; font-weight: 800;
+  color: #f9a825; background: rgba(249,168,37,.1);
+  border: 1px solid rgba(249,168,37,.3);
+  padding: 2px 8px; border-radius: 99px;
+}
+
+/* ── Pokédex ─────────────────────────────────────────────────── */
+.pokedex-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pokedex-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.pokedex-title-row { display: flex; align-items: center; gap: 10px; }
+.pokedex-icon { font-size: 1.4rem; }
+.pokedex-title-row h3 { font-size: 1.1rem; font-weight: 800; }
+.dex-count-badge {
+  background: var(--bg3); color: var(--text-muted);
+  font-size: .75rem; font-weight: 700; padding: 2px 10px; border-radius: 99px;
+}
+.coins-info { text-align: right; }
+.coins-big { font-size: 1.3rem; font-weight: 900; color: #f9a825; display: block; }
+.coins-hint { font-size: .72rem; color: var(--text-muted); }
+.dex-hint { color: var(--text-muted); font-size: .82rem; }
+
+.pokedex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.dex-entry {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 4px;
+  cursor: pointer; transition: border-color .15s, transform .1s;
+  position: relative;
+  text-align: center;
+}
+.dex-entry:hover { border-color: var(--accent2); transform: translateY(-2px); }
+.dex-entry.shiny-owned { border-color: #f9a825; background: rgba(249,168,37,.07); }
+.dex-entry img {
+  width: 52px; height: 52px;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.dex-entry .dex-name {
+  font-size: .65rem; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 68px;
+}
+.dex-shiny-star {
+  position: absolute; top: 3px; right: 5px;
+  font-size: .75rem;
+}
+.dex-legendary-crown {
+  position: absolute; top: 3px; left: 5px;
+  font-size: .65rem;
+}
+
+/* Shiny-Modal */
+.dex-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200; backdrop-filter: blur(4px);
+}
+.dex-modal.hidden { display: none; }
+.dex-modal-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 32px;
+  max-width: 360px; width: 90%;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  box-shadow: var(--shadow); position: relative;
+}
+.dex-modal-close {
+  position: absolute; top: 14px; right: 14px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 50%; width: 28px; height: 28px;
+  cursor: pointer; color: var(--text-muted); font-size: .85rem;
+}
+.dex-modal-sprites { display: flex; gap: 24px; }
+.dex-sprite-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.dex-sprite-big {
+  width: 96px; height: 96px;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.dex-shiny-preview { filter: brightness(.5) saturate(0); }
+.dex-shiny-preview.unlocked { filter: none; }
+.dex-sprite-label { font-size: .78rem; color: var(--text-muted); }
+.shiny-label { color: #f9a825; font-weight: 700; }
+.dex-modal-box h3 { font-size: 1.2rem; font-weight: 800; }
+.dex-modal-types { display: flex; gap: 5px; }
+.dex-modal-owned { font-size: .88rem; color: var(--text-muted); text-align: center; }
+.btn-shiny-buy {
+  padding: 11px 28px; background: linear-gradient(135deg, #f9a825, #ff8f00);
+  color: #000; font-size: .95rem; font-weight: 800;
+  border: none; border-radius: var(--radius); cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn-shiny-buy:hover:not(:disabled) { opacity: .85; }
+.btn-shiny-buy:disabled { opacity: .35; cursor: not-allowed; }
+.btn-shiny-buy.already-owned { background: var(--success); color: #fff; }
+
+/* ── Andere Spiele ───────────────────────────────────────────── */
+.other-games-section { display: flex; flex-direction: column; gap: 10px; }
+.other-games-row { display: flex; gap: 12px; }
+.game-link-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 18px 16px; border-radius: 14px; text-decoration: none;
+  border: 1px solid var(--border); transition: border-color .15s, transform .1s;
+  background: var(--bg2);
+}
+.game-link-btn:hover { transform: translateY(-3px); }
+.poketype-btn:hover { border-color: #3b82f6; }
+.clonelab-btn:hover { border-color: #22c55e; }
+.gl-logo { font-size: 1.4rem; font-weight: 900; letter-spacing: -.5px; }
+.poketype-btn .gl-poke { color: #ffcb05; }
+.poketype-btn .gl-type { color: #3b82f6; }
+.clonelab-btn .gl-clone { color: #22c55e; }
+.clonelab-btn .gl-lab   { color: #a855f7; }
+.gl-sub { font-size: .75rem; color: var(--text-muted); }
+
+/* ── Result Rewards ──────────────────────────────────────────── */
+.result-rewards {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+}
+.reward-chip {
+  padding: 6px 14px; border-radius: 99px; font-size: .88rem; font-weight: 700;
+  background: var(--bg3); border: 1px solid var(--border);
+}
+.reward-chip.lp-pos { color: var(--success); border-color: rgba(34,197,94,.4); }
+.reward-chip.lp-neg { color: var(--danger);  border-color: rgba(239,68,68,.4); }
+.reward-chip.xp     { color: var(--accent);  border-color: rgba(255,203,5,.4); }
+.reward-chip.coins  { color: #f9a825;         border-color: rgba(249,168,37,.4); }
+
+/* LP Change (legacy – keep for fallback) */
 .lp-change { font-size: 1.2rem; font-weight: 800; }
 .lp-change.pos { color: var(--success); }
 .lp-change.neg { color: var(--danger); }

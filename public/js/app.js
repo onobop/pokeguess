@@ -174,6 +174,11 @@ function updateLeagueUI(lp, league) {
   if (rbEl) rbEl.style.width = `${pct}%`;
 }
 
+// ─── Shiny-Sprite URL ────────────────────────────────────────────────────────
+function shinySpriteUrl(id) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/${id}.png`;
+}
+
 // ─── User UI updaten ──────────────────────────────────────────────────────────
 function updateUserUI() {
   const u = state.user;
@@ -183,6 +188,9 @@ function updateUserUI() {
   const xpBar = document.getElementById('ui-xp-bar');
   if (xpBar) xpBar.style.width = `${Math.min(100,(u.xp/(u.xpToNext||100))*100)}%`;
   updateLeagueUI(u.lp || 0, u.league);
+  // Coins
+  const coinsEl  = document.getElementById('ui-coins');
+  if (coinsEl) coinsEl.textContent = `🪙 ${u.coins || 0}`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -239,6 +247,7 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 async function showHome() {
   state.isRanked = false;
   updateUserUI();
+  showScreen('screen-home');
   try {
     const { user } = await apiFetch('/api/auth/me');
     state.user = { ...state.user, ...user };
@@ -248,14 +257,126 @@ async function showHome() {
     document.getElementById('stat-ranked-wins').textContent = user.stats?.rankedWins || 0;
     document.getElementById('stat-games').textContent       = user.stats?.gamesPlayed || 0;
     updateUserUI();
-
-    // Freundesanfragen Badge
     const reqs = user.friendRequests?.length || 0;
     const badge = document.getElementById('friend-badge');
     if (badge) { badge.textContent = reqs; badge.classList.toggle('hidden', reqs === 0); }
   } catch {}
-  showScreen('screen-home');
+  // Pokédex laden
+  loadPokedex();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//   POKÉDEX
+// ══════════════════════════════════════════════════════════════════════════════
+let dexData = [];    // aktuell geladene Pokédex-Einträge
+let dexCoins = 0;
+let dexModalEntry = null;
+
+async function loadPokedex() {
+  try {
+    const data = await apiFetch('/api/pokedex');
+    dexCoins = data.coins || 0;
+    dexData  = data.pokedex || [];
+    renderPokedex();
+  } catch {}
+}
+
+function renderPokedex() {
+  const grid = document.getElementById('pokedex-grid');
+  const countEl = document.getElementById('dex-count-badge');
+  const coinsEl = document.getElementById('dex-coins-display');
+  if (countEl) countEl.textContent = `${dexData.length} gefangen`;
+  if (coinsEl) coinsEl.textContent = `🪙 ${dexCoins}`;
+  // Topbar Coins
+  const uiCoins = document.getElementById('ui-coins');
+  if (uiCoins) uiCoins.textContent = `🪙 ${dexCoins}`;
+
+  if (!grid) return;
+  if (dexData.length === 0) {
+    grid.innerHTML = '<p class="muted-text dex-empty-msg">Noch keine Pokémon gefangen – spiele eine Runde!</p>';
+    return;
+  }
+
+  // Sortieren: erst nach ID
+  const sorted = [...dexData].sort((a, b) => a.pokemonId - b.pokemonId);
+
+  grid.innerHTML = sorted.map(p => {
+    const sprite = p.isShiny ? shinySpriteUrl(p.pokemonId) : p.sprite;
+    const shinyBadge = p.isShiny ? '<span class="dex-shiny-star">✨</span>' : '';
+    const legendBadge = (p.isLegendary || p.isMythical) ? '<span class="dex-legendary-crown">👑</span>' : '';
+    return `<div class="dex-entry ${p.isShiny ? 'shiny-owned' : ''}" data-id="${p.pokemonId}" title="${p.pokemonName}">
+      ${shinyBadge}${legendBadge}
+      <img src="${sprite}" alt="${p.pokemonName}" loading="lazy"/>
+      <span class="dex-name">${p.pokemonName}</span>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.dex-entry').forEach(el =>
+    el.addEventListener('click', () => openDexModal(Number(el.dataset.id)))
+  );
+}
+
+function openDexModal(pokemonId) {
+  const entry = dexData.find(e => e.pokemonId === pokemonId);
+  if (!entry) return;
+  dexModalEntry = entry;
+
+  document.getElementById('dex-modal-name').textContent   = entry.pokemonName;
+  document.getElementById('dex-modal-normal').src         = entry.sprite;
+  document.getElementById('dex-modal-normal').alt         = entry.pokemonName;
+  const shinyImg = document.getElementById('dex-modal-shiny');
+  shinyImg.src = shinySpriteUrl(pokemonId);
+  shinyImg.className = `dex-sprite-big dex-shiny-preview${entry.isShiny ? ' unlocked' : ''}`;
+
+  document.getElementById('dex-modal-types').innerHTML =
+    (entry.types || []).map(typeChip).join('');
+
+  const price = (entry.isLegendary || entry.isMythical) ? 100 : 50;
+  const buyBtn = document.getElementById('btn-buy-shiny');
+
+  if (entry.isShiny) {
+    document.getElementById('dex-modal-owned').textContent = '✨ Shiny bereits vorhanden!';
+    buyBtn.textContent = '✨ Bereits gekauft';
+    buyBtn.className   = 'btn-shiny-buy already-owned';
+    buyBtn.disabled    = true;
+  } else {
+    const affordable = dexCoins >= price;
+    document.getElementById('dex-modal-owned').textContent =
+      `Deine Coins: 🪙 ${dexCoins}  |  Preis: 🪙 ${price}`;
+    buyBtn.textContent = `✨ Shiny kaufen – 🪙 ${price}`;
+    buyBtn.className   = 'btn-shiny-buy';
+    buyBtn.disabled    = !affordable;
+  }
+
+  document.getElementById('dex-modal').classList.remove('hidden');
+}
+
+document.getElementById('btn-dex-close').addEventListener('click', () => {
+  document.getElementById('dex-modal').classList.add('hidden');
+  dexModalEntry = null;
+});
+document.getElementById('dex-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('dex-modal')) {
+    document.getElementById('dex-modal').classList.add('hidden');
+  }
+});
+
+document.getElementById('btn-buy-shiny').addEventListener('click', async () => {
+  if (!dexModalEntry) return;
+  try {
+    const { coins } = await apiFetch('/api/pokedex/shiny', {
+      method: 'POST',
+      body: JSON.stringify({ pokemonId: dexModalEntry.pokemonId }),
+    });
+    dexCoins = coins;
+    // Lokal updaten
+    const e = dexData.find(d => d.pokemonId === dexModalEntry.pokemonId);
+    if (e) e.isShiny = true;
+    toast(`✨ ${dexModalEntry.pokemonName} Shiny freigeschaltet!`, 'success');
+    document.getElementById('dex-modal').classList.add('hidden');
+    renderPokedex();
+  } catch (err) { toast(err.message, 'error'); }
+});
 
 // Home Tabs
 document.querySelectorAll('.home-tab').forEach(btn =>
@@ -546,8 +667,11 @@ document.querySelectorAll('.input-tab').forEach(tab =>
 // ══════════════════════════════════════════════════════════════════════════════
 //   RESULT
 // ══════════════════════════════════════════════════════════════════════════════
+let _pendingRewards = null; // wird von user:statsUpdated befüllt
+
 function showResult(data) {
   showScreen('screen-result');
+  clearTurnTimer();
   const isWinner = data.winner === state.user?.id;
   document.getElementById('result-icon').textContent    = isWinner ? '🏆' : '💀';
   document.getElementById('result-title').textContent   = isWinner ? 'Sieg!' : 'Niederlage';
@@ -560,6 +684,22 @@ function showResult(data) {
     ${data.opponentPremise ? `<div style="margin-top:8px">Gegner-Prämisse: <strong>${data.opponentPremise.label}</strong></div>` : ''}
     ${data.myPremise      ? `<div>Deine Prämisse: <strong>${data.myPremise.label}</strong></div>` : ''}
   `;
+  // Rewards werden von user:statsUpdated befüllt (kommt kurz nach game:over)
+  document.getElementById('result-rewards').innerHTML = '';
+}
+
+function renderResultRewards(stats) {
+  const chips = [];
+  if (stats.lpChange !== undefined && stats.lpChange !== 0) {
+    const cls = stats.lpChange > 0 ? 'lp-pos' : 'lp-neg';
+    const sign = stats.lpChange > 0 ? '+' : '';
+    chips.push(`<span class="reward-chip ${cls}">${sign}${stats.lpChange} LP</span>`);
+  }
+  if (stats.coinsEarned) chips.push(`<span class="reward-chip coins">+🪙 ${stats.coinsEarned}</span>`);
+  chips.push(`<span class="reward-chip xp">+XP → Lv.${stats.level}</span>`);
+  if (stats.newDexEntries?.length) chips.push(`<span class="reward-chip coins">🔴 +${stats.newDexEntries.length} Pokédex</span>`);
+  const el = document.getElementById('result-rewards');
+  if (el) el.innerHTML = chips.join('');
 }
 
 document.getElementById('btn-surrender').addEventListener('click', () => {
@@ -736,16 +876,17 @@ function initSocket() {
   socket.on('game:over', data => showResult(data));
   socket.on('user:statsUpdated', stats => {
     state.user = { ...state.user, ...stats };
+    if (stats.coins !== undefined) state.user.coins = stats.coins;
     localStorage.setItem('pg_user', JSON.stringify(state.user));
-    // LP-Änderung anzeigen
-    const lpEl = document.getElementById('lp-change');
-    if (lpEl && stats.lpChange !== undefined) {
-      const sign = stats.lpChange >= 0 ? '+' : '';
-      lpEl.textContent = `${sign}${stats.lpChange} LP`;
-      lpEl.className = `lp-change ${stats.lpChange >= 0 ? 'pos' : 'neg'}`;
+    // Reward-Chips im Result-Screen
+    renderResultRewards(stats);
+    // Coins in Topbar
+    const coinsEl = document.getElementById('ui-coins');
+    if (coinsEl) coinsEl.textContent = `🪙 ${stats.coins ?? state.user.coins ?? 0}`;
+    // Pokédex live updaten wenn neue Einträge
+    if (stats.newDexEntries?.length) {
+      loadPokedex();
     }
-    const xpEl = document.getElementById('xp-earned');
-    if (xpEl) xpEl.textContent = `+XP → Lv.${stats.level}`;
   });
 
   socket.on('game:opponentDisconnected', ({ username }) => toast(`${username} hat die Verbindung getrennt.`, 'error'));

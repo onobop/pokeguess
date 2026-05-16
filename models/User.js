@@ -32,6 +32,21 @@ const userSchema = new mongoose.Schema({
     leagueName: { type: String, default: 'Pokéball' },
   },
 
+  // RocketCoins
+  coins: { type: Number, default: 0 },
+
+  // Pokédex – bestätigte Pokémon aus Spielen
+  pokedex: [{
+    pokemonId:   { type: Number, required: true },
+    pokemonName: { type: String },
+    sprite:      { type: String },
+    types:       [{ type: String }],
+    isLegendary: { type: Boolean, default: false },
+    isMythical:  { type: Boolean, default: false },
+    isShiny:     { type: Boolean, default: false },
+    obtainedAt:  { type: Date, default: Date.now },
+  }],
+
   // Statistiken
   stats: {
     wins:        { type: Number, default: 0 },
@@ -42,8 +57,8 @@ const userSchema = new mongoose.Schema({
   },
 
   // Freunde
-  friends:        [{ type: String }],          // Usernames
-  friendRequests: [{ type: String }],          // ausstehende Anfragen (von wem)
+  friends:        [{ type: String }],
+  friendRequests: [{ type: String }],
 
 }, { timestamps: true });
 
@@ -67,6 +82,43 @@ userSchema.methods.addLp = function (amount) {
   this.league = league;
 };
 
+// ─── Coins ────────────────────────────────────────────────────────────────────
+userSchema.methods.addCoins = function (amount) {
+  this.coins = Math.max(0, (this.coins || 0) + amount);
+};
+
+// ─── Pokédex ──────────────────────────────────────────────────────────────────
+/** Fügt Pokémon zum Pokédex hinzu (kein Duplikat). Gibt true zurück wenn neu. */
+userSchema.methods.addToPokedex = function (entry) {
+  const exists = this.pokedex.some(e => e.pokemonId === entry.pokemonId);
+  if (exists) return false;
+  this.pokedex.push({
+    pokemonId:   entry.pokemonId,
+    pokemonName: entry.pokemonName,
+    sprite:      entry.sprite,
+    types:       entry.types || [],
+    isLegendary: entry.isLegendary || false,
+    isMythical:  entry.isMythical  || false,
+    isShiny:     false,
+    obtainedAt:  new Date(),
+  });
+  return true;
+};
+
+/** Kauft Shiny-Version für ein Pokémon. Gibt { ok, reason } zurück. */
+userSchema.methods.buyShiny = function (pokemonId) {
+  const entry = this.pokedex.find(e => e.pokemonId === pokemonId);
+  if (!entry)        return { ok: false, reason: 'Pokémon nicht im Pokédex' };
+  if (entry.isShiny) return { ok: false, reason: 'Shiny bereits vorhanden' };
+
+  const price = (entry.isLegendary || entry.isMythical) ? 100 : 50;
+  if (this.coins < price) return { ok: false, reason: `Zu wenig Coins (${price} 🪙 benötigt)` };
+
+  this.coins -= price;
+  entry.isShiny = true;
+  return { ok: true, price };
+};
+
 // ─── Passwort ─────────────────────────────────────────────────────────────────
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
@@ -88,6 +140,8 @@ userSchema.methods.toPublic = function () {
     xpToNext: this.xpToNextLevel(),
     lp: this.lp,
     league: this.league,
+    coins: this.coins || 0,
+    dexCount: this.pokedex?.length || 0,
     stats: this.stats,
     friends: this.friends,
     friendRequests: this.friendRequests,
