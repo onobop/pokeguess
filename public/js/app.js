@@ -190,6 +190,55 @@ function updateUserUI() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//   PROF. EICH TUTORIAL
+// ══════════════════════════════════════════════════════════════════════════════
+const TUTORIAL_STEPS = [
+  `Hallo! Willkommen in der Welt der POKÉMON!<br>Ich heiße <strong>Prof. Eich</strong>. Lass mich dir <strong>PokéGuess</strong> erklären!`,
+  `Beide Spieler wählen zu Beginn geheim eine <strong>Prämisse</strong> – zum Beispiel <em>„Wasser-Typ"</em>, <em>„Legendäres Pokémon"</em> oder <em>„Nur eine Entwicklung"</em>.`,
+  `Dann schlägst du abwechselnd Pokémon vor. Das Spiel antwortet automatisch:<br>
+   <span class="t-yes">✓ Ja</span> – das Pokémon passt zur Gegner-Prämisse!<br>
+   <span class="t-no">✗ Nein</span> – es passt nicht, der Zug wechselt.`,
+  `Bei Doppeltyp-Prämissen gibt es auch ein <strong style="color:#d97706">~ Teiltreffer</strong> – einer der zwei Typen stimmt, aber nicht beide. Schlau nutzen!`,
+  `<strong>Pro Zug hast du 20 Sekunden!</strong> Bestätigte Pokémon sind wertvolle Hinweise – nutze sie, um die Prämisse deines Gegners zu erraten.`,
+  `Du kannst die Prämisse jederzeit direkt raten – aber <span class="t-no">3 Fehlversuche = Niederlage!</span><br>Im <strong>Ranked-Modus</strong> kämpfst du um LP und steigst durch die Ligen auf. Viel Erfolg, Trainer! 🏆`,
+];
+
+let tutorialStep = 0;
+
+function showTutorial() {
+  tutorialStep = 0;
+  renderTutorialStep();
+  document.getElementById('tutorial-modal').classList.remove('hidden');
+}
+
+function renderTutorialStep() {
+  const total = TUTORIAL_STEPS.length;
+  document.getElementById('tutorial-text').innerHTML = TUTORIAL_STEPS[tutorialStep];
+
+  // Dots
+  const dotsEl = document.getElementById('tutorial-dots');
+  dotsEl.innerHTML = Array.from({ length: total }, (_, i) =>
+    `<div class="tutorial-dot${i === tutorialStep ? ' active' : ''}"></div>`
+  ).join('');
+
+  // Button-Text
+  const btn = document.getElementById('btn-tutorial-next');
+  const isLast = tutorialStep === total - 1;
+  btn.textContent = isLast ? 'Los geht\'s! 🎮' : 'Weiter ▶';
+  btn.className   = isLast ? 'btn-tutorial-next finish' : 'btn-tutorial-next';
+}
+
+document.getElementById('btn-tutorial-next').addEventListener('click', () => {
+  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+    tutorialStep++;
+    renderTutorialStep();
+  } else {
+    document.getElementById('tutorial-modal').classList.add('hidden');
+    localStorage.setItem('pg_tutorial_seen', '1');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 //   AUTH
 // ══════════════════════════════════════════════════════════════════════════════
 document.querySelectorAll('.tab').forEach(btn =>
@@ -219,16 +268,20 @@ document.getElementById('form-register').addEventListener('submit', async e => {
       method: 'POST',
       body: JSON.stringify({ username: document.getElementById('reg-username').value.trim(), password: document.getElementById('reg-password').value }),
     });
-    onLogin(token, user);
+    onLogin(token, user, true); // true = neu registriert → Tutorial zeigen
   } catch (err) { document.getElementById('reg-error').textContent = err.message; }
 });
 
-function onLogin(token, user) {
+function onLogin(token, user, isNewUser = false) {
   state.token = token; state.user = user;
   localStorage.setItem('pg_token', token);
   localStorage.setItem('pg_user', JSON.stringify(user));
   initSocket();
   showHome();
+  // Tutorial nur bei Erstregistrierung und wenn noch nicht gesehen
+  if (isNewUser && !localStorage.getItem('pg_tutorial_seen')) {
+    setTimeout(() => showTutorial(), 600); // kurz warten bis Home-Screen geladen
+  }
 }
 
 document.getElementById('btn-logout').addEventListener('click', () => {

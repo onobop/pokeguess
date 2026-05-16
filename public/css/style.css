@@ -1018,6 +1018,101 @@ button:active { transform: scale(.97); }
 .result-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
 
 /* ══════════════════════════════════════════════════════════════
+   PROF. EICH TUTORIAL
+   ══════════════════════════════════════════════════════════════ */
+.tutorial-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 40px;
+  z-index: 500;
+  animation: fadeIn .3s ease;
+}
+.tutorial-modal.hidden { display: none; }
+@keyframes fadeIn { from { opacity: 0; } }
+
+.tutorial-box {
+  display: flex; align-items: flex-end; gap: 0;
+  max-width: 720px; width: 92%;
+  animation: slideUp .35s ease;
+}
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } }
+
+.tutorial-sprite-wrap {
+  flex-shrink: 0;
+  margin-bottom: -4px; /* flush to box border */
+}
+.prof-sprite {
+  width: 140px; height: 140px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  filter: drop-shadow(2px 0 0 #1a1a2e);
+}
+
+.tutorial-right {
+  flex: 1;
+  display: flex; flex-direction: column;
+  background: #fff;
+  border: 4px solid #1a1a2e;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 5px 5px 0 #000;
+  overflow: hidden;
+}
+
+.tutorial-namebox {
+  background: #1a1a2e;
+  color: #ffcb05;
+  font-weight: 900;
+  font-size: .95rem;
+  padding: 6px 16px;
+  letter-spacing: .04em;
+}
+
+.tutorial-textbox {
+  padding: 16px 18px;
+  min-height: 80px;
+  flex: 1;
+}
+.tutorial-textbox p {
+  color: #111;
+  font-size: 1rem;
+  line-height: 1.65;
+  margin: 0;
+}
+.tutorial-textbox strong { color: #1a1a2e; }
+.tutorial-textbox .t-yes { color: #16a34a; font-weight: 700; }
+.tutorial-textbox .t-no  { color: #dc2626; font-weight: 700; }
+
+.tutorial-footer {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 12px;
+  border-top: 2px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.tutorial-dots { display: flex; gap: 6px; }
+.tutorial-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: background .2s;
+}
+.tutorial-dot.active { background: #1a1a2e; }
+
+.btn-tutorial-next {
+  padding: 7px 20px;
+  background: #1a1a2e; color: #ffcb05;
+  border: none; border-radius: 8px;
+  font-weight: 800; font-size: .9rem;
+  cursor: pointer; transition: opacity .15s;
+  letter-spacing: .03em;
+}
+.btn-tutorial-next:hover { opacity: .85; }
+.btn-tutorial-next.finish { background: #16a34a; color: #fff; }
+
+/* ══════════════════════════════════════════════════════════════
    TOAST
    ══════════════════════════════════════════════════════════════ */
 #toast-container {
