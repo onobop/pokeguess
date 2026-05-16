@@ -2,21 +2,28 @@ const router = require('express').Router();
 const auth   = require('../middleware/auth');
 const { getAllPremises, getPremisesForTier, getPokemonForPremise, getMaxTierForLevel, getPokemon } = require('../engine/premiseEngine');
 
-// GET /api/premises  – alle für den User freigeschalteten Prämissen + Pokémon-Listen
+// GET /api/premises  – Prämissen (eigene Auswahl oder alle fürs Raten)
 router.get('/premises', auth, async (req, res) => {
   try {
+    // ?all=true → alle Prämissen ohne Tier-Einschränkung (für Gegner-Raten)
+    if (req.query.all === 'true') {
+      const premises = getAllPremises();
+      const result = premises.map(p => ({
+        id: p.id, label: p.label, category: p.category,
+        tier: p.tier, hint: p.hint,
+        count: getPokemonForPremise(p.id).length,
+      }));
+      return res.json({ premises: result, maxTier: 2 });
+    }
+
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
     const maxTier = getMaxTierForLevel(user.level);
     const premises = getPremisesForTier(maxTier);
 
-    // Für jede Prämisse: wie viele Pokémon passen rein (für Anzeige)
     const result = premises.map(p => ({
-      id: p.id,
-      label: p.label,
-      category: p.category,
-      tier: p.tier,
-      hint: p.hint,
+      id: p.id, label: p.label, category: p.category,
+      tier: p.tier, hint: p.hint,
       count: getPokemonForPremise(p.id).length,
     }));
     res.json({ premises: result, maxTier });

@@ -136,7 +136,6 @@ function performSuggestPokemon(io, room, userId, pokemon) {
 
   const alreadySuggested = (room.guesses[userId] || []).some(g => g.pokemonId === pokemon.id);
   if (alreadySuggested) {
-    // Bot wählt ein anderes
     if (room.players.find(p => p.userId === userId)?.isBot) {
       scheduleBotAction(io, room, room.players.find(p => p.userId === userId));
     }
@@ -146,10 +145,20 @@ function performSuggestPokemon(io, room, userId, pokemon) {
   const opponentPremiseId = room.premises[opponent.userId];
   const matches = pokemonMatchesPremise(pokemon, opponentPremiseId);
 
+  // Teilmatch bei Doppeltyp-Prämissen: einer der zwei Typen passt, aber nicht beide
+  let isPartial = false;
+  if (!matches && opponentPremiseId.startsWith('dualtype_')) {
+    const oppPremise = getPremiseById(opponentPremiseId);
+    if (oppPremise?.dualTypes) {
+      isPartial = oppPremise.dualTypes.some(t => (pokemon.types || []).includes(t));
+    }
+  }
+  const resultStr = matches ? 'yes' : (isPartial ? 'partial' : 'no');
+
   const entry = {
     pokemonId: pokemon.id, pokemonName: pokemon.nameDE,
     pokemonSprite: pokemon.sprite, pokemonTypes: pokemon.types,
-    result: matches ? 'yes' : 'no', timestamp: Date.now(),
+    result: resultStr, timestamp: Date.now(),
   };
   room.guesses[userId].push(entry);
 
@@ -162,12 +171,11 @@ function performSuggestPokemon(io, room, userId, pokemon) {
     });
   }
 
-  // Gegner sieht Vorschlag in seiner rechten Spalte
   if (!room.oppSuggestHistory[opponent.userId]) room.oppSuggestHistory[opponent.userId] = [];
   room.oppSuggestHistory[opponent.userId].push({
     pokemonId: pokemon.id, pokemonName: pokemon.nameDE,
     pokemonSprite: pokemon.sprite, pokemonTypes: pokemon.types,
-    result: matches ? 'yes' : 'no',
+    result: resultStr,
   });
 
   if (!matches) room.currentTurn = opponent.userId;
@@ -176,10 +184,9 @@ function performSuggestPokemon(io, room, userId, pokemon) {
   emitToRoom(io, room, 'game:pokemonResult', {
     suggestedBy: userId,
     pokemon: { id: pokemon.id, name: pokemon.nameDE, sprite: pokemon.sprite, types: pokemon.types },
-    matches, nextTurn: room.currentTurn,
+    matches, isPartial, nextTurn: room.currentTurn,
   });
 
-  // Falls jetzt der Bot dran ist
   if (!matches) {
     const nextPlayer = room.players.find(p => p.userId === room.currentTurn);
     if (nextPlayer?.isBot) scheduleBotAction(io, room, nextPlayer);
@@ -571,6 +578,21 @@ module.exports = function registerGameHandler(io) {
 
       const player = room.players.find(p => p.userId === userId);
       performGuessPremise(io, room, userId, premiseId, player);
+    });
+
+    // ── Zug passen (Timer abgelaufen, keine Eingabe) ──────────
+    socket.on('game:passTurn', () => {
+      const info = players.get(socket.id);
+      if (!info) return;
+      const room = rooms.get(info.roomId);
+      if (!room || room.phase !== 'guessing') return;
+      if (room.currentTurn !== userId) return;
+      const opponent = otherPlayer(room, userId);
+      if (!opponent) return;
+      room.currentTurn = opponent.userId;
+      emitStateToAll(io, room);
+      const nextP = room.players.find(p => p.userId === room.currentTurn);
+      if (nextP?.isBot) scheduleBotAction(io, room, nextP);
     });
 
     // ── Aufgeben ───────────────────────────────────────────────

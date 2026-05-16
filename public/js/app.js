@@ -23,7 +23,8 @@ const state = {
   user:    JSON.parse(localStorage.getItem('pg_user') || 'null'),
   roomId:  null, isRanked: false,
   gameState: null,
-  premises: [],
+  premises: [],       // gefilterte (eigene Prämissenwahl)
+  allPremises: [],    // alle (für Gegner-Raten)
   selectedPremise: null, confirmedPremise: null,
   guessPremise: null,
 };
@@ -82,16 +83,11 @@ function clearTurnTimer() {
 }
 
 function autoSuggestOnTimeout() {
+  // Kein Auto-Vorschlag – Zug einfach abgeben
   if (!state.gameState || state.gameState.phase !== 'guessing') return;
-  // Schon vorgeschlagene Namen herausfiltern
-  const suggested = new Set(
-    (state.gameState.myGuessHistory || []).filter(h => h.pokemonId).map(h => h.pokemonName)
-  );
-  const pool = AUTO_SUGGEST_POOL.filter(n => !suggested.has(n));
-  const name = pool[Math.floor(Math.random() * pool.length)] || 'Pikachu';
-  toast(`⏱ Zeit abgelaufen – Auto: ${name}`, 'info', 2500);
-  lastTurnOwner = null; // Timer nach Antwort ggf. neu starten
-  socket.emit('game:suggestPokemon', { pokemonName: name });
+  toast('⏱ Zeit abgelaufen – Zug weitergegeben', 'info', 2500);
+  lastTurnOwner = null;
+  socket.emit('game:passTurn');
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -511,7 +507,7 @@ document.getElementById('btn-cancel-preview').addEventListener('click', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 //   GAME SCREEN
 // ══════════════════════════════════════════════════════════════════════════════
-function showGameScreen() {
+async function showGameScreen() {
   showScreen('screen-game');
   document.getElementById('history-list').innerHTML = '';
   document.getElementById('opp-suggest-list').innerHTML = '';
@@ -520,9 +516,14 @@ function showGameScreen() {
   document.getElementById('opp-suggest-count').textContent = '0';
   if (state.confirmedPremise)
     document.getElementById('my-premise-badge').textContent = state.confirmedPremise.label;
-  lastTurnOwner = null; // Timer-State zurücksetzen
+  lastTurnOwner = null;
   clearTurnTimer();
   initPokemonSearch();
+  // Alle Prämissen für Gegner-Raten laden (inkl. Tier 2 die man selbst noch nicht hat)
+  try {
+    const { premises } = await apiFetch('/api/premises?all=true');
+    state.allPremises = premises;
+  } catch { state.allPremises = state.premises; }
   renderGuessPremiseList('');
 }
 
@@ -572,14 +573,19 @@ function updateGameState(gs) {
 }
 
 function renderHistory(history) {
-  document.getElementById('history-list').innerHTML = history.map(entry => {
+  const list = document.getElementById('history-list');
+  list.innerHTML = history.map(entry => {
     if (entry.pokemonId) {
-      const cls = entry.result === 'yes' ? 'yes' : 'no';
-      return `<div class="history-entry ${cls}">
+      const r = entry.result; // 'yes' | 'partial' | 'no'
+      const icon = r === 'yes' ? '✓' : (r === 'partial' ? '~' : '✗');
+      const partialHint = r === 'partial'
+        ? '<span class="partial-hint">ein Typ ✓</span>' : '';
+      return `<div class="history-entry ${r}">
+        <span class="history-result">${icon}</span>
         <img src="${entry.pokemonSprite}" alt="${entry.pokemonName}"/>
         <span>${entry.pokemonName}</span>
         <span class="type-chips">${(entry.pokemonTypes||[]).map(typeChip).join('')}</span>
-        <span class="history-result">${entry.result==='yes'?'✓':'✗'}</span>
+        ${partialHint}
       </div>`;
     }
     return `<div class="history-entry ${entry.result==='correct'?'yes':'wrong-guess'}">
@@ -587,6 +593,10 @@ function renderHistory(history) {
       <span class="history-result">${entry.result==='correct'?'✓':'✗'}</span>
     </div>`;
   }).join('');
+
+  // Immer zum neuesten Eintrag scrollen
+  const last = list.lastElementChild;
+  if (last) requestAnimationFrame(() => last.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
 
 // Pokémon-Suche
@@ -627,10 +637,11 @@ document.getElementById('btn-suggest').addEventListener('click', () => {
   document.getElementById('pokemon-search-input').value = '';
 });
 
-// Prämissen-Raten
+// Prämissen-Raten (nutzt allPremises – alle Prämissen unabhängig von Level)
 function renderGuessPremiseList(q) {
   const list = document.getElementById('guess-premise-list');
-  const filtered = state.premises.filter(p => !q || p.label.toLowerCase().includes(q.toLowerCase()));
+  const source = state.allPremises.length ? state.allPremises : state.premises;
+  const filtered = source.filter(p => !q || p.label.toLowerCase().includes(q.toLowerCase()));
   list.innerHTML = filtered.map(p => `
     <div class="premise-item" data-id="${p.id}">
       <span class="premise-name">${p.label}</span>
@@ -863,9 +874,10 @@ function initSocket() {
     showGameScreen();
   });
   socket.on('game:state', gs => updateGameState(gs));
-  socket.on('game:pokemonResult', ({ suggestedBy, pokemon, matches }) => {
+  socket.on('game:pokemonResult', ({ suggestedBy, pokemon, matches, isPartial }) => {
     if (suggestedBy !== state.user?.id) {
-      toast(`${pokemon.name} → ${matches ? '✓ Ja!' : '✗ Nein'}`, 'info', 2000);
+      const label = matches ? '✓ Ja!' : (isPartial ? '~ Ein Typ passt' : '✗ Nein');
+      toast(`${pokemon.name} → ${label}`, 'info', 2000);
     }
   });
   socket.on('game:wrongGuess', ({ premiseLabel, mistakesLeft }) => {
