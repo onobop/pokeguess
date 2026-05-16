@@ -31,6 +31,7 @@ const T = {
     'auth.login.submit':      'Einloggen',
     'auth.register.ph.user':  'Benutzername (3–20 Zeichen)',
     'auth.register.ph.pass':  'Passwort (min. 6 Zeichen)',
+    'auth.register.hint.pass':'Mindestens 6 Zeichen',
     'auth.register.submit':   'Account erstellen',
 
     /* ── Home topbar ── */
@@ -257,6 +258,7 @@ const T = {
     'auth.login.submit':      'Log In',
     'auth.register.ph.user':  'Username (3–20 chars)',
     'auth.register.ph.pass':  'Password (min. 6 chars)',
+    'auth.register.hint.pass':'At least 6 characters',
     'auth.register.submit':   'Create Account',
 
     /* ── Home topbar ── */

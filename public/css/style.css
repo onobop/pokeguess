@@ -159,6 +159,7 @@ button:active { transform: scale(.97); }
 }
 .auth-form input:focus { border-color: var(--accent2); }
 .auth-error { color: var(--danger); font-size: .85rem; min-height: 18px; }
+.input-hint  { color: var(--text-muted); font-size: .78rem; margin-top: 2px; }
 
 /* ══════════════════════════════════════════════════════════════
    LOBBY SCREEN

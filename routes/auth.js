@@ -26,7 +26,11 @@ router.post('/register', async (req, res) => {
     res.status(201).json({ token: makeToken(user), user: publicUser(user) });
   } catch (err) {
     console.error('[register error]', err.message);
-    res.status(500).json({ error: err.message || 'Serverfehler' });
+    if (err.name === 'ValidationError') {
+      const msg = Object.values(err.errors).map(e => e.message).join(', ');
+      return res.status(400).json({ error: msg });
+    }
+    res.status(500).json({ error: 'Serverfehler' });
   }
 });
 

@@ -25,8 +25,9 @@
       <p class="auth-error" id="login-error"></p>
     </form>
     <form id="form-register" class="auth-form">
-      <input type="text"     id="reg-username" data-i18n-ph="auth.register.ph.user" placeholder="Benutzername (3–20 Zeichen)" required/>
-      <input type="password" id="reg-password" data-i18n-ph="auth.register.ph.pass" placeholder="Passwort (min. 6 Zeichen)" required/>
+      <input type="text"     id="reg-username" data-i18n-ph="auth.register.ph.user" placeholder="Benutzername (3–20 Zeichen)" minlength="3" maxlength="20" required/>
+      <input type="password" id="reg-password" data-i18n-ph="auth.register.ph.pass" placeholder="Passwort (min. 6 Zeichen)" minlength="6" required/>
+      <p class="input-hint" data-i18n="auth.register.hint.pass">Mindestens 6 Zeichen</p>
       <button type="submit" class="btn-primary" data-i18n="auth.register.submit">Account erstellen</button>
       <p class="auth-error" id="reg-error"></p>
     </form>
