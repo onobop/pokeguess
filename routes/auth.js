@@ -3,6 +3,7 @@ const jwt    = require('jsonwebtoken');
 const User   = require('../models/User');
 
 function makeToken(user) {
+  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET env var ist nicht gesetzt');
   return jwt.sign(
     { id: user._id, username: user.username },
     process.env.JWT_SECRET,
@@ -24,8 +25,8 @@ router.post('/register', async (req, res) => {
     const user = await User.create({ username, password });
     res.status(201).json({ token: makeToken(user), user: publicUser(user) });
   } catch (err) {
-    console.error('[register]', err);
-    res.status(500).json({ error: 'Serverfehler' });
+    console.error('[register error]', err.message);
+    res.status(500).json({ error: err.message || 'Serverfehler' });
   }
 });
 
@@ -39,8 +40,8 @@ router.post('/login', async (req, res) => {
 
     res.json({ token: makeToken(user), user: publicUser(user) });
   } catch (err) {
-    console.error('[login]', err);
-    res.status(500).json({ error: 'Serverfehler' });
+    console.error('[login error]', err.message);
+    res.status(500).json({ error: err.message || 'Serverfehler' });
   }
 });
 
@@ -56,14 +57,7 @@ router.get('/me', require('../middleware/auth'), async (req, res) => {
 });
 
 function publicUser(u) {
-  return {
-    id: u._id,
-    username: u.username,
-    level: u.level,
-    xp: u.xp,
-    xpToNext: u.xpToNextLevel(),
-    stats: u.stats,
-  };
+  return u.toPublic();
 }
 
 module.exports = router;

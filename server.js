@@ -1,4 +1,9 @@
 require('dotenv').config();
+
+// ─── Pflicht-Env-Vars prüfen ──────────────────────────────────────────────────
+['JWT_SECRET', 'MONGODB_URI'].forEach(k => {
+  if (!process.env[k]) console.warn(`⚠️  Env-Variable ${k} ist nicht gesetzt!`);
+});
 const express    = require('express');
 const http       = require('http');
 const { Server } = require('socket.io');
