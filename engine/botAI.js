@@ -71,20 +71,27 @@ function lpToLevel(lp) {
 }
 
 // ─── Prämisse für Bot auswählen ───────────────────────────────────────────────
-function choosePremiseForBot(botLevel) {
+// premiseFilter: 'Alle' | 'Typ' | 'Generation' | 'Evolution' | 'Spezial'
+function choosePremiseForBot(botLevel, premiseFilter = 'Alle') {
   const maxTier = getMaxTierForLevel(botLevel);
   const premises = getPremisesForTier(maxTier);
   // Nur Prämissen mit mindestens 5 Pokémon (nicht zu obskur)
-  const valid = premises.filter(p => {
+  let valid = premises.filter(p => {
     const count = getPokemonForPremise(p.id).length;
     return count >= 5 && count <= 400; // nicht zu groß (z.B. "ist Endform" mit 339)
   });
+  // Filter nach Kategorie anwenden
+  if (premiseFilter && premiseFilter !== 'Alle') {
+    const filtered = valid.filter(p => p.category === premiseFilter);
+    if (filtered.length > 0) valid = filtered;
+  }
   return valid[Math.floor(Math.random() * valid.length)];
 }
 
 // ─── Bot wählt nächstes Pokémon zum Vorschlagen ───────────────────────────────
-// Strategie: Pokémon auswählen, das möglichst viele Prämissen auseinanderhält
-function choosePokemonToSuggest(confirmedIds, suggestedIds, guessAccuracy) {
+// confirmedPokemon: Array von { id, types, generation, ... } – bereits bestätigte Pokémon
+// Strategie: Nach Treffern die Typlogik nutzen, um gezielt ähnliche Pokémon zu testen
+function choosePokemonToSuggest(confirmedIds, suggestedIds, guessAccuracy, confirmedPokemon = []) {
   const allPokemon = getPokemon();
 
   // Schon vorgeschlagene ausschließen
@@ -97,8 +104,45 @@ function choosePokemonToSuggest(confirmedIds, suggestedIds, guessAccuracy) {
     return available[Math.floor(Math.random() * available.length)];
   }
 
-  // Gute Bots: diagnostisches Pokémon (aus möglichst vielen Prämissen)
-  // Nimm eine zufällige Auswahl und prüfe wieviele Prämissen es trifft
+  // ── Smarte Logik auf Basis bestätigter Treffer ────────────────────────────
+  // Typen der bestätigten Pokémon sammeln (alles, was auf die Gegner-Prämisse passt)
+  if (confirmedPokemon.length > 0 && Math.random() < guessAccuracy) {
+    const knownTypes = new Set();
+    confirmedPokemon.forEach(p => (p.types || []).forEach(t => knownTypes.add(t)));
+
+    // Kandidaten: teilen mindestens einen Typ mit bestätigten Pokémon, aber wurden noch
+    // nicht vorgeschlagen – so lernt der Bot, welcher Typ wirklich zutrifft
+    const typeCandidates = available.filter(p =>
+      (p.types || []).some(t => knownTypes.has(t))
+    );
+
+    if (typeCandidates.length > 0) {
+      // Unter den Typ-Kandidaten das diagnostisch wertvollste wählen:
+      // Pokémon bevorzugen, das möglichst viele VERSCHIEDENE Typen der Kandidaten-Menge abdeckt
+      // (hilft dabei, den genauen Typ einzugrenzen, wenn mehrere in Frage kommen)
+      const sample = typeCandidates
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 40);
+
+      let best = null;
+      let bestDiversity = -1;
+
+      for (const p of sample) {
+        // Wie viele der bekannten Typen deckt dieses Pokémon ab?
+        const covered = (p.types || []).filter(t => knownTypes.has(t)).length;
+        // Pokémon mit genau einem übereinstimmenden Typ sind diagnostischer bei Doppeltyp-Prämissen
+        const diversity = covered === 1 ? 2 : covered;
+        if (diversity > bestDiversity) {
+          best = p;
+          bestDiversity = diversity;
+        }
+      }
+
+      if (best) return best;
+    }
+  }
+
+  // ── Fallback: diagnostisches Pokémon ohne Kontext ────────────────────────
   const sample = available
     .sort(() => Math.random() - 0.5)
     .slice(0, 50);

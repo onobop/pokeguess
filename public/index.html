@@ -67,6 +67,16 @@
           <button class="btn-primary" id="btn-join" data-i18n="btn.join">Beitreten / Erstellen</button>
         </div>
         <button class="btn-secondary" id="btn-random-room" data-i18n="btn.random">Zufälliger Code</button>
+        <div class="premise-filter-section">
+          <label class="filter-label" data-i18n="filter.label">Prämissen-Filter:</label>
+          <div class="filter-btn-group" id="private-filter-group">
+            <button class="filter-btn active" data-filter="Alle" data-i18n="filter.all">Alle</button>
+            <button class="filter-btn" data-filter="Typ" data-i18n="filter.types">Typen</button>
+            <button class="filter-btn" data-filter="Generation" data-i18n="filter.gen">Generation</button>
+            <button class="filter-btn" data-filter="Evolution" data-i18n="filter.evo">Evolution</button>
+            <button class="filter-btn" data-filter="Spezial" data-i18n="filter.special">Spezial</button>
+          </div>
+        </div>
       </div>
       <div id="lobby-status" class="lobby-status hidden">
         <div class="spinner"></div>
@@ -87,6 +97,13 @@
         </div>
         <div class="lp-bar-wrap">
           <div class="lp-bar-fill" id="ranked-lp-bar"></div>
+        </div>
+        <div class="premise-filter-section">
+          <label class="filter-label" data-i18n="filter.label">Prämissen-Filter:</label>
+          <div class="filter-btn-group" id="ranked-filter-group">
+            <button class="filter-btn active" data-filter="Alle" data-i18n="filter.all">Alle</button>
+            <button class="filter-btn" data-filter="Typ" data-i18n="filter.types">Typen</button>
+          </div>
         </div>
         <button class="btn-ranked" id="btn-ranked" data-i18n="btn.ranked">⚔ Ranked Match suchen</button>
         <div id="ranked-queue-status" class="hidden">
@@ -188,6 +205,7 @@
       <span id="sel-username"></span>
       <span class="level-badge" id="sel-level">Lv.1</span>
       <span class="ranked-badge-sm hidden" id="sel-ranked-badge">⚔ RANKED</span>
+      <span class="filter-badge hidden" id="sel-filter-badge"></span>
       <button class="btn-lang-toggle" id="btn-lang-toggle-sel">🇬🇧 EN</button>
     </div>
   </header>

@@ -48,6 +48,14 @@ const T = {
     'btn.random':             'Zufälliger Code',
     'lobby.waiting':          'Warte auf Mitspieler…',
 
+    /* ── Premise filter ── */
+    'filter.label':           'Prämissen-Filter:',
+    'filter.all':             'Alle',
+    'filter.types':           'Typen',
+    'filter.gen':             'Generation',
+    'filter.evo':             'Evolution',
+    'filter.special':         'Spezial',
+
     /* ── Ranked ── */
     'btn.ranked':             '⚔ Ranked Match suchen',
     'btn.leave.queue':        'Abbrechen',
@@ -274,6 +282,14 @@ const T = {
     'btn.join':               'Join / Create',
     'btn.random':             'Random Code',
     'lobby.waiting':          'Waiting for opponent…',
+
+    /* ── Premise filter ── */
+    'filter.label':           'Premise Filter:',
+    'filter.all':             'All',
+    'filter.types':           'Types',
+    'filter.gen':             'Generation',
+    'filter.evo':             'Evolution',
+    'filter.special':         'Special',
 
     /* ── Ranked ── */
     'btn.ranked':             '⚔ Find Ranked Match',

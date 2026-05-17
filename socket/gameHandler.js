@@ -39,7 +39,7 @@ const COINS = {
 };
 
 // ─── Room erstellen ───────────────────────────────────────────────────────────
-function createRoom(roomId, isRanked = false) {
+function createRoom(roomId, isRanked = false, premiseFilter = 'Alle') {
   return {
     id: roomId, phase: 'waiting', isRanked,
     players: [],
@@ -50,6 +50,7 @@ function createRoom(roomId, isRanked = false) {
     oppSuggestHistory: {}, // was der Gegner vorgeschlagen hat (sieht man)
     winner: null, startTime: null,
     hasBot: false,
+    premiseFilter,
   };
 }
 
@@ -119,9 +120,9 @@ function scheduleBotAction(io, room, botPlayer) {
       }
     }
 
-    // Pokémon vorschlagen
+    // Pokémon vorschlagen – bestätigte Pokémon komplett übergeben für smarte Typlogik
     const pokemon = choosePokemonToSuggest(
-      confirmed.map(p => p.id), suggestedIds, botPlayer.guessAccuracy
+      confirmed.map(p => p.id), suggestedIds, botPlayer.guessAccuracy, confirmed
     );
     if (pokemon) {
       performSuggestPokemon(io, room, botPlayer.userId, pokemon);
@@ -144,16 +145,7 @@ function performSuggestPokemon(io, room, userId, pokemon) {
 
   const opponentPremiseId = room.premises[opponent.userId];
   const matches = pokemonMatchesPremise(pokemon, opponentPremiseId);
-
-  // Teilmatch bei Doppeltyp-Prämissen: einer der zwei Typen passt, aber nicht beide
-  let isPartial = false;
-  if (!matches && opponentPremiseId.startsWith('dualtype_')) {
-    const oppPremise = getPremiseById(opponentPremiseId);
-    if (oppPremise?.dualTypes) {
-      isPartial = oppPremise.dualTypes.some(t => (pokemon.types || []).includes(t));
-    }
-  }
-  const resultStr = matches ? 'yes' : (isPartial ? 'partial' : 'no');
+  const resultStr = matches ? 'yes' : 'no';
 
   const entry = {
     pokemonId: pokemon.id, pokemonName: pokemon.nameDE,
@@ -184,7 +176,7 @@ function performSuggestPokemon(io, room, userId, pokemon) {
   emitToRoom(io, room, 'game:pokemonResult', {
     suggestedBy: userId,
     pokemon: { id: pokemon.id, name: pokemon.nameDE, sprite: pokemon.sprite, types: pokemon.types },
-    matches, isPartial, nextTurn: room.currentTurn,
+    matches, nextTurn: room.currentTurn,
   });
 
   if (!matches) {
@@ -257,7 +249,7 @@ function botChoosePremise(io, room, botPlayer) {
   const delay = 1500 + Math.random() * 2000;
   setTimeout(() => {
     if (room.phase !== 'selecting') return;
-    const premise = choosePremiseForBot(botPlayer.level);
+    const premise = choosePremiseForBot(botPlayer.level, room.premiseFilter);
     if (!premise) return;
 
     room.premises[botPlayer.userId] = premise.id;
@@ -301,7 +293,9 @@ function processRankedQueue(io) {
   }
 
   const roomId = `ranked_${Date.now()}`;
-  const room   = createRoom(roomId, true);
+  // Erster Spieler in der Queue bestimmt den Filter (bei Ranked: nur 'Alle' oder 'Typ')
+  const filter = p1.premiseFilter || 'Alle';
+  const room   = createRoom(roomId, true, filter);
   rooms.set(roomId, room);
 
   room.players.push(
@@ -323,6 +317,7 @@ function processRankedQueue(io) {
     message: '⚔ Ranked Match gefunden! Wähle deine Prämisse.',
     players: room.players.map(p => ({ username: p.username, userId: p.userId })),
     isRanked: true,
+    premiseFilter: room.premiseFilter,
   });
 }
 
@@ -336,7 +331,8 @@ function injectBot(io, entry) {
 
   const bot = getBotForLP(entry.lp);
   const roomId = `ranked_bot_${Date.now()}`;
-  const room   = createRoom(roomId, true);
+  const filter = entry.premiseFilter || 'Alle';
+  const room   = createRoom(roomId, true, filter);
   rooms.set(roomId, room);
   room.hasBot = true;
 
@@ -359,6 +355,7 @@ function injectBot(io, entry) {
     message: '⚔ Gegner gefunden! Wähle deine Prämisse.',
     players: room.players.map(p => ({ username: p.username, userId: p.userId })),
     isRanked: true,
+    premiseFilter: room.premiseFilter,
   });
 
   botChoosePremise(io, room, botEntry);
@@ -469,10 +466,13 @@ module.exports = function registerGameHandler(io) {
     userSockets.set(userId, socket.id);
 
     // ── Privates Spiel: Lobby beitreten ───────────────────────
-    socket.on('lobby:join', ({ roomId, level, lp }) => {
+    socket.on('lobby:join', ({ roomId, level, lp, premiseFilter }) => {
       if (!roomId) return socket.emit('error', { message: 'Kein Raum-Code' });
       let room = rooms.get(roomId);
-      if (!room) { room = createRoom(roomId, false); rooms.set(roomId, room); }
+      const filter = premiseFilter || 'Alle';
+      if (!room) { room = createRoom(roomId, false, filter); rooms.set(roomId, room); }
+      // Wer zuerst beitritt, bestimmt den Filter
+      if (room.players.length === 0) room.premiseFilter = filter;
       if (room.players.length >= 2 && !room.players.find(p => p.userId === userId))
         return socket.emit('error', { message: 'Raum ist voll' });
 
@@ -497,6 +497,7 @@ module.exports = function registerGameHandler(io) {
         emitToRoom(io, room, 'game:selectPremise', {
           message: 'Gegner gefunden! Wähle deine Prämisse.',
           players: room.players.map(p => ({ username: p.username, userId: p.userId })),
+          premiseFilter: room.premiseFilter,
         });
       } else if (room.players.length === 2) {
         emitStateToAll(io, room);
@@ -506,9 +507,9 @@ module.exports = function registerGameHandler(io) {
     });
 
     // ── Ranked Queue ───────────────────────────────────────────
-    socket.on('ranked:join', async ({ level, lp }) => {
+    socket.on('ranked:join', async ({ level, lp, premiseFilter }) => {
       if (rankedQueue.find(q => q.userId === userId)) return;
-      const entry = { userId, username, level: level||1, lp: lp||0, socketId: socket.id, joinedAt: Date.now() };
+      const entry = { userId, username, level: level||1, lp: lp||0, socketId: socket.id, joinedAt: Date.now(), premiseFilter: premiseFilter || 'Alle' };
       rankedQueue.push(entry);
       socket.emit('ranked:queued', { position: rankedQueue.length });
 

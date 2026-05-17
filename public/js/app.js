@@ -28,6 +28,26 @@ const state = {
   guessPremise: null,
 };
 
+// ─── Prämissen-Filter (Lobby-Auswahl) ────────────────────────────────────────
+let privatePremiseFilter = 'Alle';
+let rankedPremiseFilter  = 'Alle';
+
+function initFilterButtons() {
+  ['private', 'ranked'].forEach(mode => {
+    const group = document.getElementById(`${mode}-filter-group`);
+    if (!group) return;
+    group.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (mode === 'private') privatePremiseFilter = btn.dataset.filter;
+        else                    rankedPremiseFilter  = btn.dataset.filter;
+      });
+    });
+  });
+}
+initFilterButtons();
+
 // ─── Turn-Timer ───────────────────────────────────────────────────────────────
 const TURN_SECONDS = 20;
 let   turnTimerInterval = null;
@@ -464,7 +484,7 @@ function joinPrivate() {
   state.roomId = code; state.isRanked = false;
   document.getElementById('lobby-status').classList.remove('hidden');
   document.getElementById('lobby-status-text').textContent = t('game.wait.lobby');
-  socket.emit('lobby:join', { roomId: code, level: state.user?.level || 1, lp: state.user?.lp || 0 });
+  socket.emit('lobby:join', { roomId: code, level: state.user?.level || 1, lp: state.user?.lp || 0, premiseFilter: privatePremiseFilter });
 }
 
 // Ranked
@@ -472,7 +492,7 @@ document.getElementById('btn-ranked').addEventListener('click', () => {
   state.isRanked = true;
   document.getElementById('ranked-queue-status').classList.remove('hidden');
   document.getElementById('btn-ranked').classList.add('hidden');
-  socket.emit('ranked:join', { level: state.user?.level || 1, lp: state.user?.lp || 0 });
+  socket.emit('ranked:join', { level: state.user?.level || 1, lp: state.user?.lp || 0, premiseFilter: rankedPremiseFilter });
 
   let dots = 0;
   const iv = setInterval(() => {
@@ -499,7 +519,7 @@ document.getElementById('btn-friends-back').addEventListener('click', showHome);
 // ══════════════════════════════════════════════════════════════════════════════
 //   PREMISE SELECT
 // ══════════════════════════════════════════════════════════════════════════════
-async function showSelectScreen(isRanked = false) {
+async function showSelectScreen(isRanked = false, premiseFilter = 'Alle') {
   showScreen('screen-select');
   document.getElementById('sel-opponent-hint').textContent = t('select.opp.hint');
   document.getElementById('premise-preview').classList.add('hidden');
@@ -511,8 +531,18 @@ async function showSelectScreen(isRanked = false) {
   currentCatFilter = 'Alle';
   try {
     const { premises } = await apiFetch('/api/premises');
-    state.premises = premises;
-    renderPremises(premises, 'Alle', '');
+    // Lobby-Filter anwenden: nur Prämissen der gewählten Kategorie anzeigen
+    const filtered = (premiseFilter && premiseFilter !== 'Alle')
+      ? premises.filter(p => p.category === premiseFilter)
+      : premises;
+    state.premises = filtered;
+    // Filter-Badge anzeigen
+    const badge = document.getElementById('sel-filter-badge');
+    if (badge) {
+      badge.textContent = premiseFilter !== 'Alle' ? `🔍 ${tCat(premiseFilter)}` : '';
+      badge.classList.toggle('hidden', premiseFilter === 'Alle');
+    }
+    renderPremises(filtered, 'Alle', '');
   } catch { toast(t('toast.premises.fail'), 'error'); }
 }
 
@@ -662,15 +692,12 @@ function renderHistory(history) {
   list.innerHTML = history.map(entry => {
     if (entry.pokemonId) {
       const r = entry.result;
-      const icon = r === 'yes' ? '✓' : (r === 'partial' ? '~' : '✗');
-      const partialHint = r === 'partial'
-        ? `<span class="partial-hint">${t('history.partial.hint')}</span>` : '';
+      const icon = r === 'yes' ? '✓' : '✗';
       return `<div class="history-entry ${r}">
         <span class="history-result">${icon}</span>
         <img src="${entry.pokemonSprite}" alt="${entry.pokemonName}"/>
         <span>${entry.pokemonName}</span>
         <span class="type-chips">${(entry.pokemonTypes||[]).map(typeChip).join('')}</span>
-        ${partialHint}
       </div>`;
     }
     const premLabel = tPremise(entry.premiseGuess, entry.premiseLabel);
@@ -1017,16 +1044,16 @@ function initSocket() {
   socket.on('ranked:rematch', () => {
     document.getElementById('ranked-queue-status').classList.remove('hidden');
     document.getElementById('btn-ranked').classList.add('hidden');
-    socket.emit('ranked:join', { level: state.user?.level||1, lp: state.user?.lp||0 });
+    socket.emit('ranked:join', { level: state.user?.level||1, lp: state.user?.lp||0, premiseFilter: rankedPremiseFilter });
   });
 
-  socket.on('game:selectPremise', ({ message, isRanked }) => {
+  socket.on('game:selectPremise', ({ message, isRanked, premiseFilter }) => {
     clearInterval(socket._queueInterval);
     document.getElementById('ranked-queue-status')?.classList.add('hidden');
     document.getElementById('btn-ranked')?.classList.remove('hidden');
     state.isRanked = !!isRanked;
     toast(message, 'success');
-    showSelectScreen(!!isRanked);
+    showSelectScreen(!!isRanked, premiseFilter || 'Alle');
   });
   socket.on('game:premiseConfirmed', ({ label, premiseId }) => {
     toast(t('toast.premise.chosen', { label: tPremise(premiseId, label) }), 'success');
@@ -1042,9 +1069,9 @@ function initSocket() {
     showGameScreen();
   });
   socket.on('game:state', gs => updateGameState(gs));
-  socket.on('game:pokemonResult', ({ suggestedBy, pokemon, matches, isPartial }) => {
+  socket.on('game:pokemonResult', ({ suggestedBy, pokemon, matches }) => {
     if (suggestedBy !== state.user?.id) {
-      const label = matches ? t('pokemon.result.yes') : (isPartial ? t('pokemon.result.partial') : t('pokemon.result.no'));
+      const label = matches ? t('pokemon.result.yes') : t('pokemon.result.no');
       toast(`${pokemon.name} → ${label}`, 'info', 2000);
     }
   });

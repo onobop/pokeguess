@@ -1192,3 +1192,54 @@ button:active { transform: scale(.97); }
 ::-webkit-scrollbar-track { background: var(--bg2); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════════════════
+   PRÄMISSEN-FILTER (Lobby)
+   ══════════════════════════════════════════════════════════════ */
+.premise-filter-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.filter-label {
+  display: block;
+  font-size: .75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+}
+.filter-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.filter-btn {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text-muted);
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.filter-btn:hover { background: var(--bg2); color: var(--text); }
+.filter-btn.active {
+  background: rgba(255,203,5,.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Filter-Badge neben Ranked-Badge im Select-Screen */
+.filter-badge {
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(255,203,5,.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.filter-badge.hidden { display: none; }
