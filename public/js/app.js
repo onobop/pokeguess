@@ -613,7 +613,15 @@ function updateGameState(gs) {
     clearTurnTimer(); lastTurnOwner = null;
   } else if (isMyTurn) {
     turnEl.textContent = t('game.my.turn'); turnEl.className = 'turn-indicator my-turn';
-    if (lastTurnOwner !== state.user?.id) startTurnTimer();
+    if (lastTurnOwner !== state.user?.id) {
+      startTurnTimer();
+      // Pokémon-Tab aktivieren und Eingabefeld fokussieren
+      document.querySelectorAll('.input-tab').forEach(tb => tb.classList.remove('active'));
+      document.querySelectorAll('.input-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector('.input-tab[data-mode="pokemon"]')?.classList.add('active');
+      document.getElementById('panel-pokemon')?.classList.add('active');
+      setTimeout(focusPokemonInput, 80);
+    }
     lastTurnOwner = state.user?.id;
   } else {
     turnEl.textContent = t('game.opp.thinking', { name: gs.opponentName || 'Opponent' });
@@ -676,12 +684,39 @@ function renderHistory(history) {
   if (last) requestAnimationFrame(() => last.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
 }
 
-// Pokémon-Suche
+// Pokémon-Suche mit Tastaturnavigation
 function initPokemonSearch() {
   const input = document.getElementById('pokemon-search-input');
   const sugg  = document.getElementById('pokemon-suggestions');
-  input.value = ''; let debounce;
+  input.value = '';
+  let debounce;
+  let selectedIdx = -1;
+
+  function getItems() { return sugg.querySelectorAll('.suggestion-item'); }
+
+  function setSelected(idx) {
+    const items = getItems();
+    items.forEach(el => el.classList.remove('keyboard-selected'));
+    selectedIdx = Math.max(-1, Math.min(idx, items.length - 1));
+    if (selectedIdx >= 0) {
+      items[selectedIdx].classList.add('keyboard-selected');
+      items[selectedIdx].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function confirmSuggestion() {
+    const items = getItems();
+    if (selectedIdx >= 0 && items[selectedIdx]) {
+      input.value = items[selectedIdx].dataset.name;
+      sugg.classList.add('hidden');
+      selectedIdx = -1;
+    } else if (input.value.trim()) {
+      submitSuggest();
+    }
+  }
+
   input.oninput = () => {
+    selectedIdx = -1;
     clearTimeout(debounce);
     const q = input.value.trim();
     if (q.length < 2) { sugg.classList.add('hidden'); return; }
@@ -696,23 +731,65 @@ function initPokemonSearch() {
             <div class="type-chips">${p.types.map(typeChip).join('')}</div>
           </div>`).join('');
         sugg.classList.remove('hidden');
+        selectedIdx = -1;
         sugg.querySelectorAll('.suggestion-item').forEach(item =>
           item.addEventListener('click', () => {
-            input.value = item.dataset.name; sugg.classList.add('hidden');
+            input.value = item.dataset.name;
+            sugg.classList.add('hidden');
+            selectedIdx = -1;
+            input.focus();
           })
         );
       } catch {}
     }, 200);
   };
-  document.addEventListener('click', e => { if (!sugg.contains(e.target) && e.target !== input) sugg.classList.add('hidden'); });
+
+  input.addEventListener('keydown', e => {
+    const items = getItems();
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!sugg.classList.contains('hidden') && items.length)
+        setSelected(selectedIdx + 1 < items.length ? selectedIdx + 1 : 0);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!sugg.classList.contains('hidden') && items.length)
+        setSelected(selectedIdx - 1 >= 0 ? selectedIdx - 1 : items.length - 1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      confirmSuggestion();
+    } else if (e.key === 'Escape') {
+      sugg.classList.add('hidden');
+      selectedIdx = -1;
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!sugg.contains(e.target) && e.target !== input) {
+      sugg.classList.add('hidden');
+      selectedIdx = -1;
+    }
+  });
 }
 
-document.getElementById('btn-suggest').addEventListener('click', () => {
-  const name = document.getElementById('pokemon-search-input').value.trim();
+function submitSuggest() {
+  const input = document.getElementById('pokemon-search-input');
+  const name  = input.value.trim();
   if (!name) return toast(t('toast.pokemon.empty'), 'error');
   socket.emit('game:suggestPokemon', { pokemonName: name });
-  document.getElementById('pokemon-search-input').value = '';
-});
+  input.value = '';
+  input.focus();
+}
+
+function focusPokemonInput() {
+  // Nur fokussieren wenn Pokémon-Tab aktiv ist
+  const panel = document.getElementById('panel-pokemon');
+  if (panel && panel.classList.contains('active')) {
+    const input = document.getElementById('pokemon-search-input');
+    if (input) input.focus();
+  }
+}
+
+document.getElementById('btn-suggest').addEventListener('click', submitSuggest);
 
 // Prämissen-Raten
 function renderGuessPremiseList(q) {

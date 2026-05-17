@@ -925,7 +925,13 @@ button:active { transform: scale(.97); }
   font-size: .88rem;
   transition: background .1s;
 }
-.suggestion-item:hover, .suggestion-item.selected { background: var(--bg3); }
+.suggestion-item:hover,
+.suggestion-item.selected,
+.suggestion-item.keyboard-selected { background: var(--bg3); }
+.suggestion-item.keyboard-selected {
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
 .suggestion-item img { width: 44px; height: 44px; image-rendering: pixelated; flex-shrink: 0; }
 .type-chips { display: flex; gap: 4px; margin-left: auto; }
 .type-chip {
