@@ -737,6 +737,7 @@ function initPokemonSearch() {
       input.value = items[selectedIdx].dataset.name;
       sugg.classList.add('hidden');
       selectedIdx = -1;
+      submitSuggest();
     } else if (input.value.trim()) {
       submitSuggest();
     }
@@ -754,7 +755,7 @@ function initPokemonSearch() {
         sugg.innerHTML = results.map(p => `
           <div class="suggestion-item" data-name="${p.nameDE}">
             <img src="${p.sprite}" alt="${p.nameDE}"/>
-            <span>${p.nameDE}</span>
+            <span class="sugg-name">${p.nameDE}</span>
             <div class="type-chips">${p.types.map(typeChip).join('')}</div>
           </div>`).join('');
         sugg.classList.remove('hidden');
@@ -764,7 +765,7 @@ function initPokemonSearch() {
             input.value = item.dataset.name;
             sugg.classList.add('hidden');
             selectedIdx = -1;
-            input.focus();
+            submitSuggest();
           })
         );
       } catch {}
@@ -791,7 +792,7 @@ function initPokemonSearch() {
   });
 
   document.addEventListener('click', e => {
-    if (!sugg.contains(e.target) && e.target !== input) {
+    if (!sugg.contains(e.target) && e.target !== input && !e.target.closest('.search-wrap')) {
       sugg.classList.add('hidden');
       selectedIdx = -1;
     }

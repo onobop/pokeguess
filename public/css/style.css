@@ -891,9 +891,13 @@ button:active { transform: scale(.97); }
 .input-panel { display: none; flex-direction: column; gap: 10px; }
 .input-panel.active { display: flex; }
 
-.search-wrap { position: relative; }
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .search-wrap input {
-  width: 100%;
+  flex: 1;
   padding: 10px 14px;
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -903,36 +907,43 @@ button:active { transform: scale(.97); }
   outline: none;
 }
 .search-wrap input:focus { border-color: var(--accent2); }
+.btn-suggest-inline {
+  padding: 10px 16px;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+}
 
 .suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0; right: 0;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  z-index: 50;
-  max-height: 200px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
   overflow-y: auto;
-  box-shadow: var(--shadow);
+  max-height: 420px;
 }
+.suggestions.hidden { display: none; }
+
 .suggestion-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 12px 8px 10px;
   cursor: pointer;
-  font-size: .88rem;
-  transition: background .1s;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  text-align: center;
+  transition: background .1s, border-color .15s, transform .1s;
 }
-.suggestion-item:hover,
-.suggestion-item.selected,
-.suggestion-item.keyboard-selected { background: var(--bg3); }
+.suggestion-item:hover { background: var(--bg3); border-color: var(--accent2); transform: translateY(-1px); }
 .suggestion-item.keyboard-selected {
-  border-left: 3px solid var(--accent);
-  padding-left: 9px;
+  border-color: var(--accent);
+  background: var(--bg3);
+  box-shadow: 0 0 0 2px rgba(255,203,5,.25);
 }
-.suggestion-item img { width: 44px; height: 44px; image-rendering: pixelated; flex-shrink: 0; }
+.suggestion-item img { width: 88px; height: 88px; image-rendering: pixelated; }
+.suggestion-item .sugg-name { font-size: .85rem; font-weight: 600; color: var(--text); }
 .type-chips { display: flex; gap: 4px; margin-left: auto; }
 .type-chip {
   font-size: .68rem;
